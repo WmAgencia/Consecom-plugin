@@ -1,0 +1,34 @@
+# Executáveis e artefatos gerados
+*.exe
+dist/
+*.test
+*.out
+*.log
+coverage/
+tmp/
+temp/
+
+# Configurações e credenciais locais
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.secrets
+credentials*
+state.json
+settings.json
+task-inbox.json
+*.token
+
+# Arquivos de IDE/sistema
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
+
+# Não versionar perfis de navegador ou dados de usuários
+profile/
+profiles/
+User Data/
