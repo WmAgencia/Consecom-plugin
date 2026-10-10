@@ -45,7 +45,7 @@ func (a *App) handleRPC(body []byte) (any, bool) {
 	}
 	switch q.Method {
 	case "initialize":
-		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": "2.6.0"}}), true
+		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": consecomVersion}}), true
 	case "ping":
 		return rpcResult(q.ID, map[string]any{}), true
 	case "tools/list":
@@ -182,7 +182,11 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		v, e := a.updateCheck()
 		respond(w, v, e)
-	case "/api/updates/request":
+	case "/api/updates/local":
+        if r.Method != "POST" { http.Error(w,"POST necessario",405); return }
+        v, e := a.updateRequestLocal()
+        respond(w, v, e)
+    case "/api/updates/request":
 		if r.Method != "POST" {
 			http.Error(w, "POST necessario", 405)
 			return
