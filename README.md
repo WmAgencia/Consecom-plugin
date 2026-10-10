@@ -32,3 +32,7 @@ Controle do Windows pelo ChatGPT através de um MCP próprio e túnel oficial da
 Acesso local: `http://127.0.0.1:8765`, com chave de sessão do painel. Sem terminal livre ou comando PowerShell arbitrário. Scripts NPM exigem aprovação local. O ChatGPT não acessa senhas/cookies e não deve publicar, enviar formulários ou comprar sem aprovação apropriada.
 
 Para instalação veja [INSTALACAO_E_CONEXAO.md](INSTALACAO_E_CONEXAO.md).
+
+## Atualizações oficiais desde v2.6.1
+
+A origem oficial está fixa em `WmAgencia/Consecom-plugin`; não é necessário cadastrar repositório no painel. O botão **Atualizar** fica no canto inferior esquerdo, acima de **Servidor MCP**. Um clique verifica a versão, baixa o instalador, valida seu SHA-256 e inicia a instalação quando houver versão mais recente. Atualizações iniciadas remotamente pelo ChatGPT mantêm a política de aprovação local, salvo autorização prévia explícita. Para migrar de uma versão anterior que ainda exige configuração de repositório, instale a v2.6.1 uma vez pelo GitHub Releases.
