@@ -51,8 +51,15 @@ jobs:
           $env:CGO_ENABLED = '0'
           go build -trimpath -ldflags='-s -w -H windowsgui' -o installer/payload/MCP-PC.exe .
           if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar payload' }
-      - name: Testar codigo
-        run: go test ./...
+      - name: Testar codigo com pasta temporaria fora de AppData
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'consecom-tests'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          $env:TEMP = $testTemp
+          $env:TMP = $testTemp
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { throw 'Falha nos testes' }
       - name: Registrar codigo fonte no repositorio
         if: github.ref == 'refs/heads/main'
         shell: pwsh
