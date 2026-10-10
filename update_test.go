@@ -16,22 +16,22 @@ import (
 )
 
 func TestUpdateManifestAllowsOnlyPinnedGitHubRepository(t *testing.T) {
-	m := UpdateManifest{Version: "2.6.1", URL: "https://github.com/wmagencia/consecom-mcp/releases/download/v2.6.1/Instalar_Consecom_MCP_v2_6_1.exe", SHA256: strings.Repeat("a", 64)}
-	if e := validateUpdateManifest("wmagencia/consecom-mcp", m); e != nil {
+	m := UpdateManifest{Version: "2.6.2", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.6.2/Instalar_Consecom_MCP_v2_6_1.exe", SHA256: strings.Repeat("a", 64)}
+	if e := validateUpdateManifest(officialUpdateRepo, m); e != nil {
 		t.Fatal(e)
 	}
-	bad := []string{"http://github.com/wmagencia/consecom-mcp/releases/download/v2.6.1/update.exe", "https://attacker.com/installer.exe", "https://github.com/evil/evil/releases/download/v2.6.1/installer.exe", "https://github.com/wmagencia/consecom-mcp/releases/download/v2.9.9/installer.exe", "https://github.com/wmagencia/consecom-mcp/releases/download/v2.6.1/a.zip", "https://github.com/wmagencia/consecom-mcp/releases/download/v2.6.1/x.exe?redirect=hack"}
+	bad := []string{"http://github.com/wmagencia/consecom-mcp/releases/download/v2.6.2/update.exe", "https://attacker.com/installer.exe", "https://github.com/evil/evil/releases/download/v2.6.2/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.9.9/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.6.2/a.zip", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.6.2/x.exe?redirect=hack"}
 	for _, u := range bad {
 		c := m
 		c.URL = u
-		if e := validateUpdateManifest("wmagencia/consecom-mcp", c); e == nil {
+		if e := validateUpdateManifest(officialUpdateRepo, c); e == nil {
 			t.Errorf("accepted dangerous update url %q", u)
 		}
 	}
 	for _, v := range []string{"2.5.1-beta", "2.5", "2.5.0.2", "9999999999999999999999.0.0"} {
 		c := m
 		c.Version = v
-		if e := validateUpdateManifest("wmagencia/consecom-mcp", c); e == nil {
+		if e := validateUpdateManifest(officialUpdateRepo, c); e == nil {
 			t.Errorf("accepted invalid version %q", v)
 		}
 	}
@@ -41,10 +41,10 @@ func TestUpdateChecksLocalPermissionsAndPersists(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e := a.updateSettings(UpdateSettings{Repo: "example/consecom-mcp", RemoteApproved: true}, ""); e == nil {
+	if e := a.updateSettings(UpdateSettings{Repo: officialUpdateRepo, RemoteApproved: true}, ""); e == nil {
 		t.Fatal("remote updates enabled without local phrase")
 	}
-	if e := a.updateSettings(UpdateSettings{Repo: "example/consecom-mcp", RemoteApproved: true}, "CONFIO NAS ATUALIZACOES"); e != nil {
+	if e := a.updateSettings(UpdateSettings{Repo: officialUpdateRepo, RemoteApproved: true}, "CONFIO NAS ATUALIZACOES"); e != nil {
 		t.Fatal(e)
 	}
 	if !a.updateStatus().RemoteApproved {
@@ -89,7 +89,7 @@ func TestUpdateSemver(t *testing.T) {
 	cases := []struct {
 		a, b string
 		want int
-	}{{"2.6.1", "2.5.0", 1}, {"2.5.0", "2.5.0", 0}, {"2.4.9", "2.5.0", -1}, {"2.10.0", "2.9.99", 1}}
+	}{{"2.6.2", "2.5.0", 1}, {"2.5.0", "2.5.0", 0}, {"2.4.9", "2.5.0", -1}, {"2.10.0", "2.9.99", 1}}
 	for _, c := range cases {
 		v, e := compareSemver(c.a, c.b)
 		if e != nil || v != c.want {
@@ -122,13 +122,13 @@ func TestUpdaterStagesVerifiedReleaseAndQueuesApproval(t *testing.T) {
 	payload := []byte("fake installer for network flow")
 	hash := sha256.Sum256(payload)
 	sha := hex.EncodeToString(hash[:])
-	repo := "testorg/Consecom"
-	manifest := UpdateManifest{Version: "2.6.1", URL: "https://github.com/testorg/Consecom/releases/download/v2.6.1/Instalar_Consecom_2_6_1.exe", SHA256: sha}
+	repo := officialUpdateRepo
+	manifest := UpdateManifest{Version: "2.6.2", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.6.2/Instalar_Consecom_2_6_1.exe", SHA256: sha}
 	mb, _ := json.Marshal(manifest)
 	old := updateHTTPClient
 	updateHTTPClient = &http.Client{Timeout: 5 * time.Second, Transport: updateRoundTripper(func(r *http.Request) (*http.Response, error) {
 		var data []byte
-		if r.URL.Path == "/testorg/Consecom/releases/latest/download/consecom-update.json" {
+		if r.URL.Path == "/WmAgencia/Consecom-plugin/releases/latest/download/consecom-update.json" {
 			data = mb
 		} else if r.URL.String() == manifest.URL {
 			data = payload
@@ -178,4 +178,18 @@ func TestUpdaterStagesVerifiedReleaseAndQueuesApproval(t *testing.T) {
 	if strings.HasSuffix(p.Path, ".exe") == false {
 		t.Fatalf("invalid staging path %s", p.Path)
 	}
+}
+
+func TestOfficialSourceWithoutConfiguration(t *testing.T) {
+ a, e := NewApp(filepath.Join(t.TempDir(), "config.json"))
+ if e != nil { t.Fatal(e) }
+ got := a.updateStatus()
+ if !got.Configured || got.Repo != officialUpdateRepo { t.Fatalf("repo nao fixo: %+v", got) }
+ if e := a.updateSettings(UpdateSettings{Repo: "other/repo"}, ""); e == nil { t.Fatal("origem arbitraria aceita") }
+ if e := a.updateSettings(UpdateSettings{RemoteApproved:true}, "CONFIO NAS ATUALIZACOES"); e != nil { t.Fatal(e) }
+ if !a.updateStatus().RemoteApproved { t.Fatal("autorizacao remota nao salva") }
+ b, e := NewApp(a.path); if e != nil { t.Fatal(e) }
+ if !b.updateStatus().RemoteApproved { t.Fatal("permissao remota perdida") }
+ b.mu.Lock(); b.cfg.Updates=UpdateSettings{Repo:"older/different", RemoteApproved:true}; b.mu.Unlock()
+ if b.updateStatus().RemoteApproved { t.Fatal("autorizacao de outra origem reaproveitada") }
 }
