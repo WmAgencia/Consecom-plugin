@@ -45,6 +45,12 @@ jobs:
             throw 'Tag e versao interna nao correspondem.'
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Preparar executavel para testes no Windows
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          go build -trimpath -ldflags='-s -w -H windowsgui' -o installer/payload/MCP-PC.exe .
+          if ($LASTEXITCODE -ne 0) { throw 'Falha ao preparar payload' }
       - name: Testar codigo
         run: go test ./...
       - name: Registrar codigo fonte no repositorio
