@@ -173,7 +173,7 @@ func verifyServer() error {
 			}
 			decodeErr := json.NewDecoder(res.Body).Decode(&state)
 			res.Body.Close()
-			if decodeErr == nil && state.Version == "2.6.0" && state.Service == "consecom-mcp" {
+			if decodeErr == nil && state.Version == "2.6.1" && state.Service == "consecom-mcp" {
 				return nil
 			}
 			return fmt.Errorf("a porta 8765 esta ocupada por outro servidor (versao %q). Feche essa instancia MCP antes de instalar", state.Version)
@@ -324,5 +324,5 @@ func main() {
 	if *remoteApproved {
 		return
 	}
-	msg("Consecom Plugin v2.6.0", "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: modo Chrome JA ABERTO usa as contas conectadas do Chrome pessoal, apos habilitar chrome://inspect/#remote-debugging e autorizar no Chrome. Mantem os perfis isolados e o modo Perguntar sempre.", 0x40)
+	msg("Consecom Plugin v2.6.1", "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: modo Chrome JA ABERTO usa as contas conectadas do Chrome pessoal, apos habilitar chrome://inspect/#remote-debugging e autorizar no Chrome. Mantem os perfis isolados e o modo Perguntar sempre.", 0x40)
 }
