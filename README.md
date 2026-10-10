@@ -33,3 +33,17 @@ Não publique tokens do túnel, chaves da OpenAI Platform, credenciais, perfis d
 ## Autonomia da IA
 
 O painel pode receber tarefas e processar diagnósticos locais predefinidos, mas **não faz esta conversa do ChatGPT executar sozinha a cada 10 segundos**. Um executor de IA independente é outra integração e não está incluído na v2.6.
+
+
+## Finalizar publicação inicial da versão 2.6.0
+
+O repositório já contém a automação, porém a **primeira release só será criada após o upload do arquivo** `Consecom_Plugin_v2_6_Source.zip` na raiz da branch `main`.
+
+1. Faça upload do ZIP compilável de código-fonte pela interface **Add file → Upload files** do GitHub e confirme o commit na `main`.
+2. O workflow `Compilar e publicar Consecom Plugin` será acionado automaticamente. Ele extrairá o código, rodará testes e tentará publicar a release `v2.6.0` com instalador e manifesto.
+3. Confirme na aba **Actions** que a execução terminou com sucesso. Confira os arquivos em **Releases** antes de configurar o atualizador do computador.
+4. No Consecom Plugin → Atualizações, informe o repositório `WmAgencia/Consecom-plugin`.
+
+**Não publique credenciais do túnel, dados de perfil Chrome nem arquivos da pasta de dados local.**
+
+Esta etapa de upload do ZIP e o sucesso do workflow ainda não foram confirmados.
