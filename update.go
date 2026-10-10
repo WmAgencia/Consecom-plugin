@@ -21,7 +21,9 @@ import (
 	"time"
 )
 
-const consecomVersion = "2.6.0"
+const consecomVersion = "2.6.1"
+// A única origem autorizada para instalar atualizações do Consecom Plugin.
+const officialUpdateRepo = "WmAgencia/Consecom-plugin"
 const updateMaxBytes int64 = 64 << 20
 
 var validRepo = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,80}/[A-Za-z0-9_.-]{1,100}$`)
@@ -109,29 +111,26 @@ func validateUpdateManifest(repo string, m UpdateManifest) error {
 	return nil
 }
 func (a *App) updateStatus() UpdateStatus {
-	a.mu.Lock()
-	s := a.cfg.Updates
-	a.mu.Unlock()
-	st := UpdateStatus{Version: consecomVersion, Repo: s.Repo, RemoteApproved: s.RemoteApproved, Configured: s.Repo != ""}
-	if st.Configured {
-		st.ManifestURL = updateManifestURL(s.Repo)
-	}
-	return st
+ a.mu.Lock()
+ s := a.cfg.Updates
+ a.mu.Unlock()
+ // Pré-autorizações antigas de outro repositório não valem para a origem oficial.
+ approved := s.RemoteApproved && strings.EqualFold(s.Repo, officialUpdateRepo)
+ return UpdateStatus{Version: consecomVersion, Repo: officialUpdateRepo, RemoteApproved: approved, Configured: true, ManifestURL: updateManifestURL(officialUpdateRepo)}
 }
 func (a *App) updateSettings(s UpdateSettings, confirm string) error {
-	s.Repo = strings.TrimSpace(s.Repo)
-	if s.Repo != "" {
-		if err := validateUpdateRepo(s.Repo); err != nil {
-			return err
-		}
-	}
-	if s.RemoteApproved && (s.Repo == "" || confirm != "CONFIO NAS ATUALIZACOES") {
-		return errors.New("para liberar atualizações remotas, confirme CONFIO NAS ATUALIZACOES no painel local")
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.cfg.Updates = s
-	return a.saveLocked()
+ s.Repo = strings.TrimSpace(s.Repo)
+ if s.Repo != "" && !strings.EqualFold(s.Repo, officialUpdateRepo) {
+   return errors.New("somente o repositório oficial WmAgencia/Consecom-plugin é permitido")
+ }
+ s.Repo = officialUpdateRepo
+ if s.RemoteApproved && confirm != "CONFIO NAS ATUALIZACOES" {
+   return errors.New("para liberar atualizações remotas, confirme CONFIO NAS ATUALIZACOES no painel local")
+ }
+ a.mu.Lock()
+ defer a.mu.Unlock()
+ a.cfg.Updates = s
+ return a.saveLocked()
 }
 
 var updateHTTPClient = &http.Client{Timeout: 90 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -295,10 +294,14 @@ func runInstaller(absoluteInstaller, expectedSHA string) error {
 	return cmd.Start()
 }
 func (a *App) updateRequest() (map[string]any, error) {
+ return a.updateRequestWithMode(false)
+}
+// Somente o clique no painel local pode instalar diretamente; MCP remoto exige permissão.
+func (a *App) updateRequestLocal() (map[string]any, error) {
+ return a.updateRequestWithMode(true)
+}
+func (a *App) updateRequestWithMode(localClick bool) (map[string]any, error) {
 	s := a.updateStatus()
-	if !s.Configured {
-		return nil, errors.New("configure o repositório GitHub de releases no painel local")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	m, e := fetchUpdateManifest(ctx, s.Repo)
@@ -317,11 +320,11 @@ func (a *App) updateRequest() (map[string]any, error) {
 		return nil, e
 	}
 	// A remote opt-in belongs to this locally configured trusted repository ONLY.
-	if s.RemoteApproved {
+	if localClick || s.RemoteApproved {
 		if err := runInstaller(path, m.SHA256); err != nil {
 			return nil, err
 		}
-		audit("atualizacao iniciada via MCP: %s para %s", s.Repo, m.Version)
+		audit("atualizacao iniciada (clique local=%t): %s para %s", localClick, s.Repo, m.Version)
 		return map[string]any{"status": "iniciada", "version": m.Version, "message": "instalador validado e iniciado; tunel pode cair temporariamente"}, nil
 	}
 	id, e := a.queue(&Pending{Kind: "update", Description: "Instalar Consecom " + m.Version + " do repositório confiável " + s.Repo + " (SHA-256 " + m.SHA256[:16] + "…)", Path: path, Content: m.SHA256})
@@ -333,7 +336,7 @@ func (a *App) updateRequest() (map[string]any, error) {
 func (a *App) approveUpdate(p *Pending) (string, error) {
 	// Reject stale jobs after a local repo permission change.
 	s := a.updateStatus()
-	if !s.Configured || !strings.Contains(p.Description, " "+s.Repo+" (") {
+	if !strings.Contains(p.Description, " "+s.Repo+" (") {
 		return "", errors.New("repositório confiável alterado; solicite novamente")
 	}
 	if err := runInstaller(p.Path, p.Content); err != nil {
