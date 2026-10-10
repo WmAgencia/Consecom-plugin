@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,25 +147,64 @@ func stopPrevious(exe string, remotelyApproved bool) error {
 			return fmt.Errorf("nao foi possivel parar a versao anterior: %v", callErr)
 		}
 	}
-	for i := 0; i < 30; i++ {
-		if _, e = os.Stat(exe); errors.Is(e, os.ErrNotExist) {
-			break
+	// Nao prosseguir enquanto houver um executavel antigo ainda ativo.
+	deadline := time.Now().Add(7 * time.Second)
+	for time.Now().Before(deadline) {
+		remaining, checkErr := oldPIDAtPath(exe)
+		if checkErr != nil { return checkErr }
+		if len(remaining) == 0 {
+			time.Sleep(250 * time.Millisecond)
+			return nil
 		}
-		if p, e := oldPIDAtPath(exe); e == nil && len(p) == 0 {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(150 * time.Millisecond)
 	}
-	// Windows may need a moment to release the executable image section.
-	time.Sleep(200 * time.Millisecond)
-	return nil
+	return errors.New("o processo antigo do Consecom nao encerrou; nenhuma substituicao sera efetuada")
+}
+
+func stopOwnedTunnel(binDir string) error {
+	// O tunnel-client pode religar um servidor MCP antigo. Primeiro pare o
+	// supervisor, depois encerre todos os processos MCP-PC.exe.
+	tunnelExe := filepath.Join(binDir, "tunnel-client.exe")
+	pids, err := pidAtNamedPath(tunnelExe, "tunnel-client.exe")
+	if err != nil { return err }
+	for _, pid := range pids {
+		h, openErr := syscall.OpenProcess(0x0001, false, uint32(pid))
+		if openErr != nil { return fmt.Errorf("nao foi possivel parar o tunel do Consecom (PID %d): %w", pid, openErr) }
+		ok, _, callErr := terminateProcess.Call(uintptr(h), 0)
+		syscall.CloseHandle(h)
+		if ok == 0 { return fmt.Errorf("erro ao encerrar tunel do Consecom (PID %d): %v", pid, callErr) }
+	}
+	deadline := time.Now().Add(7 * time.Second)
+	for time.Now().Before(deadline) {
+		remaining, err := pidAtNamedPath(tunnelExe, "tunnel-client.exe")
+		if err != nil { return err }
+		if len(remaining) == 0 { return nil }
+		time.Sleep(150 * time.Millisecond)
+	}
+	return errors.New("cliente de tunel anterior nao encerrou; atualizacao interrompida")
+}
+
+// Exigir que a porta esteja realmente livre antes de copiar executaveis.
+// Nunca encerra outros aplicativos que nao sejam os binarios do Consecom.
+func waitForPortReleased(address string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		conn, err := net.DialTimeout("tcp", address, 200*time.Millisecond)
+		if err != nil { return nil }
+		conn.Close()
+		if time.Now().After(deadline) {
+			return fmt.Errorf("a porta %s continua ocupada; feche outras instancias MCP antes de atualizar", address)
+		}
+		time.Sleep(180 * time.Millisecond)
+	}
 }
 
 // Confirms that the server actually serving the dashboard is THIS version,
 // not another MCP instance still listening on the same port.
 func verifyServer() error {
-	client := http.Client{Timeout: 500 * time.Millisecond}
-	for i := 0; i < 20; i++ {
+	client := http.Client{Timeout: 600 * time.Millisecond}
+	var lastVersion string
+	for i := 0; i < 60; i++ {
 		res, err := client.Get("http://127.0.0.1:8765/health")
 		if err == nil {
 			var state struct {
@@ -173,14 +213,17 @@ func verifyServer() error {
 			}
 			decodeErr := json.NewDecoder(res.Body).Decode(&state)
 			res.Body.Close()
-			if decodeErr == nil && state.Version == "2.6.1" && state.Service == "consecom-mcp" {
+			if decodeErr == nil && state.Version == "2.6.2" && state.Service == "consecom-mcp" {
 				return nil
 			}
-			return fmt.Errorf("a porta 8765 esta ocupada por outro servidor (versao %q). Feche essa instancia MCP antes de instalar", state.Version)
+			lastVersion = state.Version
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
-	return errors.New("o servidor MCP nao iniciou; confira o log em %LOCALAPPDATA%\\ConsecomMCP\\service.log")
+	if lastVersion != "" {
+		return fmt.Errorf("porta 8765 ocupada por outra instancia (versao %q); a nova versao nao assumiu o servidor", lastVersion)
+	}
+	return errors.New("o novo servidor MCP nao iniciou; confira o log em %LOCALAPPDATA%\\ConsecomMCP\\service.log")
 }
 
 func rollbackExecutable(exe string) error {
@@ -216,28 +259,13 @@ func install(remotelyApproved bool) error {
 		return e
 	}
 	exe := filepath.Join(dir, "MCP-PC.exe")
-	if e := stopPrevious(exe, remotelyApproved); e != nil {
+	// Ordem obrigatoria: parar supervisor que poderia recriar processos antigos,
+	// parar processos do Consecom e confirmar ausencia de listener antes da troca.
+	if e := stopOwnedTunnel(dir); e != nil { return e }
+	if e := stopPrevious(exe, remotelyApproved); e != nil { return e }
+	if e := waitForPortReleased("127.0.0.1:8765", 8*time.Second); e != nil {
+		// Nenhum binario foi substituido ainda; nao apagar/alterar dados pessoais.
 		return e
-	}
-	// Tunnel client owned by the old Consecom instance must not overlap.
-	// Only touch the exact client installed in Consecom's private directory.
-	if pids, err := pidAtNamedPath(filepath.Join(dir, "tunnel-client.exe"), "tunnel-client.exe"); err == nil {
-		for _, pid := range pids {
-			h, openErr := syscall.OpenProcess(0x0001, false, uint32(pid))
-			if openErr == nil {
-				terminateProcess.Call(uintptr(h), 0)
-				syscall.CloseHandle(h)
-			}
-		}
-		if len(pids) > 0 {
-			for i := 0; i < 25; i++ {
-				rest, err := pidAtNamedPath(filepath.Join(dir, "tunnel-client.exe"), "tunnel-client.exe")
-				if err == nil && len(rest) == 0 {
-					break
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
 	}
 	data, e := assets.ReadFile("payload/MCP-PC.exe")
 	if e != nil {
@@ -324,5 +352,5 @@ func main() {
 	if *remoteApproved {
 		return
 	}
-	msg("Consecom Plugin v2.6.1", "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: modo Chrome JA ABERTO usa as contas conectadas do Chrome pessoal, apos habilitar chrome://inspect/#remote-debugging e autorizar no Chrome. Mantem os perfis isolados e o modo Perguntar sempre.", 0x40)
+	msg("Consecom Plugin v2.6.2", "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: modo Chrome JA ABERTO usa as contas conectadas do Chrome pessoal, apos habilitar chrome://inspect/#remote-debugging e autorizar no Chrome. Mantem os perfis isolados e o modo Perguntar sempre.", 0x40)
 }
