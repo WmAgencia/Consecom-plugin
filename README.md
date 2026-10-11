@@ -2,7 +2,7 @@
 
 Integração controlada entre o ChatGPT e um computador Windows por meio de um servidor MCP local e túnel privado.
 
-**Versão atual do projeto:** 4.0.0
+**Versão publicada:** 4.0.0 · **Próxima versão em desenvolvimento:** 4.1.0
 
 ## Recursos
 
@@ -66,3 +66,11 @@ Quando o usuário habilita **Aprovação máxima** no próprio painel (confirma�
 - **Fluxos de tarefas**: executar ate 6 comandos de desenvolvimento predefinidos sequencialmente, interrompendo se um falhar. Acompanhar etapa, logs e cancelar. O fluxo nao e um agente IA independente de conversas.
 
 **Seguranca:** ferramentas limitadas a pastas autorizadas e listas de comandos, sem shell arbitrario, captura de credenciais ou elevacao silenciosa. Acesso administrativo futuro deve usar UAC, registros e escopos especificos.
+
+
+## V4.1.0 em desenvolvimento (nao publicada)
+- `codigo_previsualizar_diff`: previa textual de uma substituicao exata, com verificacao de versao SHA-256 sem tocar no arquivo.
+- `codigo_restaurar_backup`: restauro de snapshot criado pelas edicoes desta fase, bloqueado se houve modificacao externa, com backup preventivo para recuperacao.
+- `fluxo_historico`: ultimos 20 fluxos com progresso e status; snapshots locais gravados durante cada etapa e recuperados apos reinicio. Fluxos interrompidos **nao** sao retomados automaticamente.
+- Catalogo em desenvolvimento: **72 ferramentas MCP**, sujeito a validacao no runner Windows e testes reais no PC.
+- A release v4.0.0 permanece a versao distribuida ate merge, validacao e nova publicacao.
