@@ -180,10 +180,10 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-info{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:9px;color:#8aa9ba;font-size:11px}
 .live-chat-status{white-space:pre-wrap;max-width:100%}
 @media(max-width:680px){.live-chat-stream{padding:13px;max-height:400px}.live-chat-row{max-width:92%}.live-chat-editor{align-items:stretch}.live-chat-editor textarea{width:100%}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.2 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.3 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
-<h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p></div></div>
+<h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Conferindo se o Consecom Live está ativo...</p></div></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
 <div class="live-chat-stream" id="liveChatStream" role="log" aria-live="polite" aria-relevant="additions">
 <div class="live-chat-empty">Esta é sua conversa com o ChatGPT. Escreva abaixo, mantenha o Consecom Live ativo na conversa do ChatGPT e veja a resposta chegar aqui.</div>
@@ -253,7 +253,21 @@ async function refreshConsecomChat(force=false){
  try{
   const response=(await api('live/chat')).result;
   const messages=Array.isArray(response.messages)?response.messages:[];
-  const sig=messages.map(x=>x.id+':'+x.status).join('|');
+  const bridge=response.connection||{status:'disconnected',automatic_ready:false};
+   const bridgeLabel=document.getElementById('liveBridgeConnection');
+   if(bridgeLabel){
+    const names={ready:'● Live detectado · recepção automática ativa',passive:'◐ Live detectado · envio automático não confirmado',disconnected:'○ Live não detectado · abra ou reabra o componente no ChatGPT'};
+    bridgeLabel.textContent=names[bridge.status]||names.disconnected;
+    bridgeLabel.style.color=bridge.status==='ready'?'#7cddba':'#e4ae73';
+   }
+   const lastPending=[...messages].reverse().find(m=>m.role==='user'&&m.status==='queued');
+   if(lastPending){
+    const age=Date.now()-Date.parse(lastPending.created_at);
+    if(Number.isFinite(age)&&age>15000&&!bridge.automatic_ready){
+     mark('liveComposeState','A mensagem está na fila há '+Math.round(age/1000)+'s. Consecom Live não está confirmado como ativo; abra ou reabra o componente no ChatGPT.');
+    }
+   }
+   const sig=messages.map(x=>x.id+':'+x.status).join('|');
   if(!force&&sig===liveChatSignature)return;
   liveChatSignature=sig;
   const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<90;

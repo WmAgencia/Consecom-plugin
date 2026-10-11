@@ -137,6 +137,7 @@ func (b *LiveLab) chatHistory()map[string]any{
  sort.SliceStable(records,func(i,j int)bool{return records[i].CreatedAt<records[j].CreatedAt})
  return map[string]any{
   "messages":records,"total":len(records),"reply_limit_bytes":maxChatReplyBytes,
+  "connection":b.connectionStatusLocked(),
   "bridge":"ChatGPT Chat via existing MCP Apps widget; no API billing",
   "note":"Messages appear when the ChatGPT model calls consecom_chat_responder; model replies are not scraped automatically.",
  }
