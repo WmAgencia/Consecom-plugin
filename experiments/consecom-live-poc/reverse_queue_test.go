@@ -113,10 +113,12 @@ func TestReverseHTTPMCPWaitAndEmit(t *testing.T){
 }
 func TestReverseJournalFailurePreventsEvent(t *testing.T){
  dir:=t.TempDir()
- blocker:=filepath.Join(dir,"not-directory")
- if err:=os.WriteFile(blocker,[]byte("block"),0600);err!=nil{t.Fatal(err)}
+ blocker:=filepath.Join(dir,"events.json")
  b:=newBroker()
- if err:=b.restoreJournal(filepath.Join(blocker,"events.json"));err!=nil{t.Fatal(err)}
+ if err:=b.restoreJournal(blocker);err!=nil{t.Fatal(err)}
+ // Make the destination a directory AFTER registering its location.
+ // Atomic rename must fail; no event is published or acknowledged.
+ if err:=os.Mkdir(blocker,0700);err!=nil{t.Fatal(err)}
  if ev,err:=b.emitWithError();err==nil||ev.ID!=""{t.Fatal("event was emitted without durable write")}
  if b.count()!=0{t.Fatal("uncommitted event was visible")}
 }
