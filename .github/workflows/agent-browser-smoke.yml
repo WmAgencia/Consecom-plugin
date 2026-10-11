@@ -55,6 +55,13 @@ jobs:
             if ($snapshotText -notmatch 'Detalhes' -or $snapshotText -notmatch 'Busca') {
               throw "Accessibility snapshot lacks expected fixture elements: $snapshotText"
             }
+            $inputLine = ($snapshot | Where-Object { $_ -match 'textbox.*Busca' } | Select-Object -First 1)
+            $inputRef = [regex]::Match($inputLine,'ref=(e[0-9]+)')
+            if (-not $inputRef.Success) { throw "Agent-browser input ref not found: $inputLine" }
+            agent-browser --session consecom-v46-ci --allowed-domains $domain fill ("@" + $inputRef.Groups[1].Value) "teste-consecom"
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser fill failed' }
+            $filled = (agent-browser --session consecom-v46-ci --allowed-domains $domain get value ("@" + $inputRef.Groups[1].Value)) -join " "
+            if ($LASTEXITCODE -ne 0 -or $filled -notmatch 'teste-consecom') { throw "Input fill was not confirmed: $filled" }
             $linkLine = ($snapshot | Where-Object { $_ -match 'link.*Detalhes' } | Select-Object -First 1)
             $linkRef = [regex]::Match($linkLine,'ref=(e[0-9]+)')
             if (-not $linkRef.Success) { throw "Agent-browser link ref not found: $linkLine" }
