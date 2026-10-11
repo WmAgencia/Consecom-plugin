@@ -23,7 +23,7 @@ article{border-top:1px solid #2c4252;padding:9px 0}article strong{font-size:12px
 (function(){
 "use strict";
 const box=document.getElementById("events"),status=document.getElementById("status"),automatic=document.getElementById("auto");
-const seen=new Set();let cursor=0,active=true,attempts=0,failures=0;
+const seen=new Set();let cursor=0,active=true,attempts=0,failures=0,fastPathAvailable=true;
 const started=Date.now(),MAX_ATTEMPTS=50;
 function notice(s){status.textContent=s}
 function extract(response){
@@ -38,10 +38,10 @@ function observe(ev,mode,result,observedAt){
  if(typeof fn!=="function")return;
  Promise.resolve(fn("consecom_live_reportar_host",{id:ev.id,mode:mode,status:result,observed_at:observedAt||new Date().toISOString()})).catch(function(){});
 }
-function ask(ev,manual){
+function ask(ev,manual,approvedBatch=false){
  if(!ev||!/^evt-[0-9]{6}$/.test(ev.id))return;
  if(attempts>=MAX_ATTEMPTS){notice("Limite de envios nesta sessão. Reabra o componente.");return}
- if(!manual&&!automatic.checked)return;
+ if(!manual&&!approvedBatch&&!automatic.checked)return;
  const fn=window.openai&&window.openai.sendFollowUpMessage,mode=manual?"manual":"auto";
  if(typeof fn!=="function"){notice("Host não disponibilizou o envio de mensagens.");observe(ev,mode,"unavailable");return}
  attempts++;
@@ -102,7 +102,7 @@ async function claimAndSend(ev,manual){
   }
  }
 }
-function show(ev){
+async function show(ev,ownedClaim=false){
  if(!ev||!/^evt-[0-9]{6}$/.test(ev.id)||seen.has(ev.id))return;
  seen.add(ev.id);
  if(box.textContent==="Aguardando mensagens...")box.textContent="";
@@ -117,7 +117,12 @@ function show(ev){
  item.append(title,msg,btn);box.prepend(item);
  while(box.children.length>14)box.lastChild.remove();
  if(ev.kind==="PANEL_MESSAGE"){
-  if(ev.delivery==="queued")void claimAndSend(ev,false);
+  // The fast-path claimed and persisted the event in the SAME MCP call.
+  // Dispatch only an ID actually won by this widget, never a claimed event
+  // seen in another widget. A batch authorized before checkbox toggling
+  // is finished rather than silently stranding a claimed message.
+  if(ownedClaim)ask(ev,false,true);
+  else if(ev.delivery==="queued")await claimAndSend(ev,false);
  }else if(Date.parse(ev.created_at)>=started-1000){ask(ev,false)}
 }
 async function poll(){
@@ -126,17 +131,38 @@ async function poll(){
  notice("Aguardando mensagens do painel Consecom...");
  while(active){
   try{
-   const result=extract(await api("consecom_live_aguardar",{after_sequence:cursor,wait_ms:8000}));
+   // The dedicated MCP tool combines waiting + atomic claim in one trip.
+   // Avoid starting a second long poll while a legacy claim is pending:
+   // a serialized MCP host could otherwise delay dispatch by 8+ seconds.
+   const useFast=automatic.checked&&fastPathAvailable;
+   const tool=useFast?"consecom_live_aguardar_e_assumir":"consecom_live_aguardar";
+   let reply;
+   try{
+    reply=await api(tool,{after_sequence:cursor,wait_ms:useFast?5000:6000});
+    if(reply&&reply.isError)throw new Error(JSON.stringify(reply).slice(0,250));
+   }catch(err){
+    if(useFast&&/unknown tool|not found|unrecognized|not registered|invalid tool|unsupported/i.test(String(err&&err.message||err))){
+     fastPathAvailable=false;
+     notice("Modo compatível ativo: atualize o plugin para o envio rápido.");
+     continue;
+    }
+    throw err;
+   }
+   const result=extract(reply);
    failures=0;
    if(result){
     const events=Array.isArray(result.events)?result.events:[];
-    for(const ev of events){show(ev);cursor=Math.max(cursor,Number(ev.sequence)||0)}
+    const owned=new Set(Array.isArray(result.claimed_ids)?result.claimed_ids:[]);
+    for(const ev of events){
+     // Wait for any legacy claim before reopening a long poll.
+     await show(ev,owned.has(ev.id));
+     cursor=Math.max(cursor,Number(ev.sequence)||0);
+    }
     if(result.gap)notice("Alguns eventos antigos saíram do histórico. Confira a fila no painel.");
     if(result.sequence!==undefined&&!events.length)cursor=Math.max(cursor,Number(result.sequence)||0);
    }
   }catch(err){
    notice("Reconectando ao MCP: "+String(err&&err.message||err).slice(0,135));
-   // Recover quickly from a transient MCP initialization conflict without a busy retry loop.
    failures=Math.min(failures+1,5);
    const retryMs=Math.min(2500,400*Math.pow(2,failures-1));
    await new Promise(resolve=>setTimeout(resolve,retryMs));
