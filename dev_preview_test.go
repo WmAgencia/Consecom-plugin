@@ -73,7 +73,7 @@ func TestPreviewSecurityAndApproval(t *testing.T){
 func TestPreviewFrameworkRestrictions(t *testing.T){
  a,rootID,port:=previewFixture(t)
  root,err:=a.getRoot(rootID);if err!=nil{t.Fatal(err)}
- data,_:=json.Marshal(map[string]any{"name":"fake","scripts":{"dev":"node server.js"},"dependencies":{"express":"*"}})
+ data,_:=json.Marshal(map[string]any{"name":"fake","scripts":map[string]any{"dev":"node server.js"},"dependencies":map[string]any{"express":"*"}})
  if err:=os.WriteFile(filepath.Join(root.Path,"package.json"),data,0600);err!=nil{t.Fatal(err)}
  if _,err:=a.previewStart(rootID,port,false);err==nil{t.Fatal("unsupported framework accepted")}
  if err:=os.Remove(filepath.Join(root.Path,"package.json"));err!=nil{t.Fatal(err)}
