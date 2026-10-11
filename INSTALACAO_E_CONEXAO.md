@@ -1,11 +1,11 @@
-# Consecom Plugin — instalação 2.7.2
+# Consecom Plugin — instalação 3.0.0
 
 ## Atualizar pelo painel
 
 1. Abra `http://127.0.0.1:8765` no Windows.
 2. Clique em **Atualizar**, na parte inferior da barra lateral, acima de **Servidor MCP**.
 3. O programa consulta a release oficial de `WmAgencia/Consecom-plugin`, valida versão e SHA-256, baixa o instalador e executa a atualização.
-4. Aguarde o servidor e o túnel reiniciarem. A partir da v2.7.2, a página verifica o reinício e recarrega automaticamente. Ao migrar de versões anteriores, use Ctrl+Shift+R caso a página não se atualize.
+4. Aguarde o servidor e o túnel reiniciarem. A partir da v3.0.0, a página verifica o reinício e recarrega automaticamente. Ao migrar de versões anteriores, use Ctrl+Shift+R caso a página não se atualize.
 5. No ChatGPT, atualize o catálogo do plugin MCP se ferramentas antigas ainda aparecerem. Esta versão apresenta **40 ferramentas**.
 
 ## Primeira instalação
