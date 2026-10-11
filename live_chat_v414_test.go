@@ -81,7 +81,7 @@ func TestChatDashboardUIAndPrompt(t *testing.T){
 }
 func TestChatFastPathTelemetryAndMeasuredLatency(t *testing.T){
  followup:=strings.Index(liveWidgetHTML,"const followUp=fn({prompt:prompt,scrollToBottom:false})")
- telemetry:=strings.Index(liveWidgetHTML,"observe(ev,mode,\"attempt\")")
+ telemetry:=strings.Index(liveWidgetHTML,"observe(ev,mode,\"attempt\",dispatchedAt)")
  if followup<0||telemetry<0||followup>=telemetry{t.Fatal("Host message must be dispatched before telemetry RPC")}
  if !strings.Contains(liveWidgetHTML,"retryMs=300*Math.pow(2,retry)"){t.Fatal("Missing fast transient claim retry")}
  if !strings.Contains(liveWidgetHTML,"failures=Math.min(failures+1,5)"){t.Fatal("Missing bounded MCP reconnect backoff")}
