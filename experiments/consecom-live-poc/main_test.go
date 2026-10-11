@@ -59,3 +59,14 @@ func TestLiveMCPWidgetResource(t *testing.T){
  if err:=json.Unmarshal(b,&payload);err!=nil{t.Fatal(err)}
  if len(payload.Result.Contents)!=1 || !strings.Contains(payload.Result.Contents[0].Text,"Solicitar continuação automaticamente") {t.Fatalf("widget missing: %s",b)}
 }
+
+func TestLiveReadOnlyMCPDoesNotRequireStaticToken(t *testing.T) {
+ a:=testLiveApp(t)
+ req:=httptest.NewRequest(http.MethodPost,"/mcp",strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`))
+ req.Header.Set("Content-Type","application/json")
+ w:=httptest.NewRecorder()
+ a.mux().ServeHTTP(w,req)
+ if w.Code!=200 {t.Fatalf("anonymous synthetic-only MCP rejected: %d",w.Code)}
+ body:=w.Body.String()
+ if !strings.Contains(body,"consecom_live_abrir") || strings.Contains(body,"consecom_live_emitir_teste") {t.Fatalf("unexpected tools: %s",body)}
+}
