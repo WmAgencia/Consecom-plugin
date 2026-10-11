@@ -39,6 +39,7 @@ type App struct {
 	agents         map[string]*Agent
 	browserControl BrowserControl
 	devJobs DevJobManager
+	workflows WorkflowManager
 }
 type ProcessTarget struct {
 	PID  int    `json:"pid"`
