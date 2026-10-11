@@ -357,6 +357,87 @@ async function showConsecomLatency(){
   mark('liveComposeState','Latência '+latest.event_id+': fila '+sec(ms.queue_ms)+' · reivindicação→envio '+sec(ms.claim_to_followup_ms)+' · envio→resposta '+sec(ms.followup_to_reply_ms)+' · resposta→painel '+sec(ms.reply_to_display_ms)+' · total '+sec(ms.total_to_reply_ms)+'. Maior etapa: '+latest.bottleneck+'.');
  }catch(e){toast('Não foi possível consultar a latência: '+e.message,true)}
 }
+async function runConsecomTenTests(){
+ if(liveBenchRunning)return;
+ const output=document.getElementById('liveBenchState'),button=document.getElementById('liveBenchButton');
+ try{
+  const chat=(await api('live/chat')).result;
+  if(!chat.connection||chat.connection.automatic_ready!==true){
+   output.textContent='Teste não iniciado: abra Consecom Live no ChatGPT e aguarde “recepção automática ativa”.';
+   return;
+  }
+  const previous=(chat.messages||[]).filter(m=>m.role==='user'&&['queued','claimed','host_resolved'].includes(m.status));
+  if(previous.length){
+   output.textContent='Teste não iniciado: aguarde as mensagens anteriores serem respondidas antes de iniciar 10 novas.';
+   return;
+  }
+  if(!confirm('Executar 10 mensagens de teste REAIS no ChatGPT Chat? O Consecom Live deve permanecer aberto, e o teste pode levar vários minutos. Não usa API paga.'))return;
+  liveBenchRunning=true;button.disabled=true;
+  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const results=[];
+  let cancelled='';
+  const round2=n=>(n/1000).toFixed(2).replace('.',',');
+  for(let i=1;i<=10;i++){
+   if(document.hidden){cancelled='A aba ficou oculta e o teste foi interrompido para evitar envio sem supervisão.';break}
+   output.textContent='Teste real '+i+'/10: enviando e aguardando resposta. Concluídos: '+results.length+'.';
+   const sent=(await api('live/send',{message:'Teste automático de latência Consecom '+i+'/10. Responda apenas OK '+i+'.'})).result;
+   let result=null,finalReceived=false;
+   const timeout=Date.now()+120000;
+   // Wait for the actual final reply before sending another host turn, avoiding a flood
+   // of concurrent ChatGPT messages. Delivery latency excludes model generation.
+   while(Date.now()<timeout){
+    if(document.hidden){cancelled='A aba ficou oculta; teste interrompido.';break}
+    const [latency,transcript]=await Promise.all([
+     api('live/latency'),api('live/chat')
+    ]);
+    const candidate=(latency.result.messages||[]).find(m=>m.event_id===sent.id);
+    if(candidate){
+     const stamps=candidate.timestamps||{};
+     const dispatched=stamps.followup_at||'';
+     const accepted=stamps.host_resolved_at||'';
+     const first=stamps.sent_at||sent.created_at;
+     const last=dispatched||accepted;
+     if(last&&Number.isFinite(Date.parse(first))&&Number.isFinite(Date.parse(last))){
+      const duration=Date.parse(last)-Date.parse(first);
+      if(duration>=0){
+       result={id:sent.id,ms:duration,exact:Boolean(dispatched)};
+      }
+     }
+    }
+    const turns=transcript.result.messages||[];
+    if(turns.some(m=>m.event_id===sent.id&&m.role==='assistant'&&m.kind==='final')){
+     finalReceived=true;
+     break;
+    }
+    if(turns.some(m=>m.id===sent.id&&['host_rejected','superseded'].includes(m.status))){
+     cancelled='Envio '+sent.id+' recusado ou substituído pelo host.';break;
+    }
+    output.textContent='Teste real '+i+'/10 · '+sent.id+': '+(result?'despacho '+round2(result.ms)+'s'+(result.exact?' (exato)':' (limite superior)'):'aguardando despacho')+' · esperando resposta final para não sobrepor mensagens.';
+    await delay(1200);
+   }
+   if(result)results.push(result);
+   if(cancelled)break;
+   if(!finalReceived){cancelled='A resposta final não chegou em 120s; teste interrompido para evitar 10 turnos concorrentes.';break}
+   if(i<10)await delay(3400);
+  }
+  const values=results.map(r=>r.ms).sort((a,b)=>a-b);
+  const exact=results.filter(r=>r.exact);
+  if(values.length){
+   const sum=values.reduce((a,b)=>a+b,0);
+   const med=values.length%2?values[(values.length-1)/2]:(values[values.length/2-1]+values[values.length/2])/2;
+   const p90=values[Math.ceil(values.length*.9)-1];
+   const above15=values.filter(v=>v>15000).length;
+   output.textContent='Teste real: '+results.length+'/10 medições; '+exact.length+' com despacho exato · média '+round2(sum/values.length)+'s · mediana '+round2(med)+'s · P90 '+round2(p90)+'s · pior '+round2(values[values.length-1])+'s · acima de 15s: '+above15+'.'+(cancelled?' PARCIAL: '+cancelled:' Concluído.')+' A geração do modelo não entra nos tempos.';
+  }else{
+   output.textContent='Nenhuma medição de despacho concluída. '+(cancelled||'Verifique o Consecom Live.');
+  }
+ }catch(e){
+  if(output)output.textContent='Teste 10x interrompido: '+e.message;
+ }finally{
+  liveBenchRunning=false;
+  if(button)button.disabled=false;
+ }
+}
 async function retryConsecomMessage(id){
  if(!confirm('Reenviar esta mensagem? Ela pode ser recebida duas vezes no ChatGPT.'))return;
  try{const r=(await api('live/retry',{id})).result;toast('Nova tentativa '+r.id);await refreshConsecomChat(true)}
