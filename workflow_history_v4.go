@@ -3,7 +3,6 @@ package main
 import (
  "encoding/json"
  "errors"
- "fmt"
  "os"
  "path/filepath"
  "sort"
@@ -38,7 +37,7 @@ func (a *App) saveWorkflowSnapshot(j WorkflowTask) error {
  closeErr:=f.Close()
  if err==nil{err=closeErr}
  if err!=nil{return err}
- if err=os.Rename(temp,filepath.Join(dir,j.ID+".json"));err!=nil{return err}
+ if err=replaceProjectFile(temp,filepath.Join(dir,j.ID+".json"));err!=nil{return err}
  // Cap disk history to 40 snapshots, keeping the most recently modified.
  files,err:=os.ReadDir(dir);if err!=nil{return nil}
  type item struct{name string;mod time.Time}
@@ -111,4 +110,3 @@ func (a *App) workflowCheckpoint(job *WorkflowTask){
  if err:=a.saveWorkflowSnapshot(cp);err!=nil{audit("workflow checkpoint %s: %v",cp.ID,err)}
 }
 
-var _=fmt.Sprintf
