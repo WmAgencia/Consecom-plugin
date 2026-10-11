@@ -312,7 +312,7 @@ func (a *App) handler() http.Handler {
 		w.Write(iconICO)
 	})
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		content(w, map[string]any{"status": "ok", "service": "consecom-mcp", "version": "2.6.0"})
+		content(w, map[string]any{"status": "ok", "service": "consecom-mcp", "version": consecomVersion})
 	})
 	mux.HandleFunc("/api/", a.apiHandler)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
