@@ -1,0 +1,34 @@
+name: Agent Browser real smoke test (Windows)
+on:
+  push:
+    branches:
+      - feature/v4.6-agent-browser-bridge
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned upstream agent-browser
+        shell: pwsh
+        run: |
+          npm install -g agent-browser@0.39.0
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          agent-browser install
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Start isolated Chromium and inspect accessible DOM
+        shell: pwsh
+        run: |
+          agent-browser --session consecom-v46-ci --allowed-domains "example.com,*.example.com" --max-output 14000 open https://example.com
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          $snapshot = agent-browser --session consecom-v46-ci --allowed-domains "example.com,*.example.com" snapshot
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (($snapshot -join " ") -match "Example Domain")) { throw "Snapshot nao encontrou Example Domain" }
+          agent-browser --session consecom-v46-ci --allowed-domains "example.com,*.example.com" close
+          if ($LASTEXITCODE -ne 0) { exit 1 }
