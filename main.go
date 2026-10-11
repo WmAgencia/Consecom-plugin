@@ -45,6 +45,10 @@ func (a *App) handleRPC(body []byte) (any, bool) {
 	}
 	switch q.Method {
 	case "initialize":
+        var hello struct{ClientInfo struct{Name string `json:"name"`} `json:"clientInfo"`}
+        if json.Unmarshal(q.Params,&hello)==nil && hello.ClientInfo.Name!=""{
+            a.contextObserveMCPClient(hello.ClientInfo.Name)
+        }
 		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": consecomVersion}}), true
 	case "ping":
 		return rpcResult(q.ID, map[string]any{}), true
@@ -196,6 +200,28 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, "tunel desconectado e credencial removida", tunnelDisconnect(a))
+	case "/api/contexto":
+        v,e:=a.contextStatus();respond(w,v,e)
+    case "/api/contexto/vault/select":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{ID string `json:"id"`}
+        if !decode(w,r,&p){return}
+        v,e:=a.contextVaultSelect(p.ID);respond(w,v,e)
+    case "/api/contexto/source/register":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{Name string `json:"name"`}
+        if !decode(w,r,&p){return}
+        v,e:=a.contextRegisterSource(p.Name,"panel-manual");respond(w,v,e)
+    case "/api/contexto/note":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{SourceID string `json:"source_id"`;Title string `json:"title"`;Content string `json:"content"`;Links []string `json:"links"`}
+        if !decode(w,r,&p){return}
+        v,e:=a.contextSaveNote(p.SourceID,p.Title,p.Content,p.Links);respond(w,v,e)
+    case "/api/contexto/note/read":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{ID string `json:"id"`}
+        if !decode(w,r,&p){return}
+        v,e:=a.contextReadNote(p.ID);respond(w,v,e)
 	case "/api/agents":
 		content(w, map[string]any{"agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
 	case "/api/policy":

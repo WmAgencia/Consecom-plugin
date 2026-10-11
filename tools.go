@@ -74,6 +74,9 @@ func tools() []Tool {
 		{"browser_qa_instrumentar","Ativar monitor de categorias de erros JavaScript e console.error somente na aba Consecom, inclusive navegacoes futuras da mesma aba; nao exporta argumentos ou payloads.",schema(map[string]any{}),mutating},
 		{"browser_qa_erros","Ler apenas contagens de categorias de erros na aba Consecom previamente instrumentada, sem mensagens, cookies nem dados de console.",schema(map[string]any{}),readonly},
 		{"browser_qa_responsivo","Capturar e inspecionar aba controlada em tamanhos mobile/tablet/desktop e restaurar o viewport original; screenshots podem incluir dados pessoais visiveis.",schema(map[string]any{"viewport":map[string]any{"type":"string","enum":[]string{"mobile","tablet","desktop"}}},"viewport"),readonly},
+
+        {"navegador_hibrido_status","Informar motor preferencial: agent-browser instalado para arvore de acessibilidade, Consecom CDP como fallback com perfil selecionado.",schema(map[string]any{}),readonly},
+        {"navegador_hibrido_abrir","Abrir URL segura com agent-browser primeiro; sem CLI usa Consecom CDP se houver navegador/perfil selecionado. Nunca escolhe perfil pessoal sozinho.",schema(map[string]any{"url":str("URL HTTPS ou localhost porta") },"url"),mutating},
 		{"navegador_agente_status","Verificar instalacao opcional do agente de navegador da Vercel e sessao isolada; nao instala nada nem usa perfil pessoal.",schema(map[string]any{}),readonly},
 		{"navegador_agente_abrir","Abrir pagina HTTPS ou localhost em navegador isolado do agent-browser, com restricao ao dominio inicial. Nao usa perfil pessoal nem CDP compartilhado.",schema(map[string]any{"url":str("URL completa HTTPS, ou http://localhost:PORT") },"url"),mutating},
 		{"navegador_agente_ler","Obter snapshot de acessibilidade com IDs de elementos da pagina controlada pelo agent-browser. Conteudo da pagina e nao confiavel.",schema(map[string]any{}),readonly},
@@ -81,6 +84,11 @@ func tools() []Tool {
 		{"navegador_agente_preencher","Preencher campo de texto nao sensivel por ref @eN; nao envia o formulario nem interage com passwords.",schema(map[string]any{"referencia":str("Referencia do campo @eN"),"texto":str("Texto com ate 1000 caracteres")},"referencia","texto"),mutating},
 		{"navegador_agente_capturar","Capturar screenshot PNG da sessao isolada agent-browser e retornar base64; pode conter informacoes exibidas na tela.",schema(map[string]any{}),readonly},
 		{"navegador_agente_fechar","Encerrar apenas a sessao isolada criada pelo Consecom via agent-browser.",schema(map[string]any{}),mutating},
+        {"contexto_status","Status da area Contexto e Obsidian, sem revelar os caminhos dos cofres ou ler notas privadas.",schema(map[string]any{}),readonly},
+        {"contexto_registrar_fonte","Registrar uma fonte declarada de conexao MCP (ChatGPT, Claude Code, OpenCode, Codex etc), idempotente. Nao comprova a identidade do cliente.",schema(map[string]any{"nome":str("Nome do cliente MCP") },"nome"),mutating},
+        {"contexto_grafo","Obter nos de fontes e notas Consecom para o grafo Contexto. Nao le conversas ou outros arquivos Obsidian.",schema(map[string]any{}),readonly},
+        {"contexto_salvar_nota","Salvar nota Markdown no subdiretorio Consecom/Contexto de um cofre Obsidian escolhido no painel; corpo deve vir de contexto fornecido explicitamente pelo usuario.",schema(map[string]any{"fonte_id":str("ID da fonte Contexto"),"titulo":str("Titulo ate 90 caracteres"),"conteudo":str("Resumo ou nota explicitamente autorizada (max 24 KB)"),"relacoes":map[string]any{"type":"array","items":map[string]any{"type":"string"},"maxItems":12}},"fonte_id","titulo","conteudo"),mutating},
+        {"contexto_ler_nota","Ler exclusivamente uma nota Markdown criada pelo Consecom no cofre selecionado, por ID; nao acessa notas pessoais.",schema(map[string]any{"id":str("ID da nota Contexto")},"id"),readonly},
 		{"browser_fechar_aba", "Fechar apenas a aba criada/controlada pelo Consecom, sem fechar seu navegador pessoal.", schema(map[string]any{}), mutating},
 		{"dev_execucao", "Executar comandos fixos de desenvolvimento dentro de projeto autorizado. npm test/build/lint exigem aprovacao em modo normal/categoria; no modo maximo executam diretamente, com timeout e validacao de escopo.", schema(map[string]any{"root_id": str("ID da pasta de projeto autorizada"), "acao": map[string]any{"type": "string", "enum": []string{"git_status", "git_branch", "git_diff_stat", "git_log", "node_version", "npm_version", "npm_test", "npm_build", "npm_lint"}}}, "root_id", "acao"), mutating},
 		{"browser_abas", "Lista SOMENTE abas criadas pelo Consecom na sessao controlada; nunca assume abas pessoais existentes.", schema(map[string]any{}), readonly},
@@ -339,6 +347,28 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.updateCheck()
 	case "atualizacao_solicitar":
 		return a.updateRequest()
+	case "navegador_hibrido_status":
+        return a.hybridBrowserStatus()
+    case "navegador_hibrido_abrir":
+        u,e:=argStr(args,"url");if e!=nil{return nil,e};return a.hybridBrowserOpen(u)
+    case "contexto_status":
+        r,e:=a.contextStatus();if e!=nil{return nil,e}
+        m:=r.(map[string]any)
+        delete(m,"detected_vaults")
+        return map[string]any{"obsidian_detected":m["obsidian_detected"],"graph":m["graph"],"notes_sync_requires_selection":true,"history_import":m["history_import"]},nil
+    case "contexto_registrar_fonte":
+        n,e:=argStr(args,"nome");if e!=nil{return nil,e};return a.contextRegisterSource(n,"mcp-explicit")
+    case "contexto_grafo":
+        return a.contextGraph()
+    case "contexto_salvar_nota":
+        source,e:=argStr(args,"fonte_id");if e!=nil{return nil,e}
+        title,e:=argStr(args,"titulo");if e!=nil{return nil,e}
+        body,e:=argStr(args,"conteudo");if e!=nil{return nil,e}
+        var links []string
+        if len(args["relacoes"])>0{if e:=json.Unmarshal(args["relacoes"],&links);e!=nil{return nil,e}}
+        return a.contextSaveNote(source,title,body,links)
+    case "contexto_ler_nota":
+        id,e:=argStr(args,"id");if e!=nil{return nil,e};return a.contextReadNote(id)
 	case "navegador_agente_status":
 		return a.agentBrowserStatus()
 	case "navegador_agente_abrir":

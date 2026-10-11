@@ -184,3 +184,23 @@ Novas ferramentas:
 Limites: o mecanismo de navegacao inteligente utiliza o **ChatGPT para decidir quais refs clicar**, nao inclui IA da Vercel nem executa a funcao \`chat\` externa do agent-browser. Cada sessao e restrita ao dominio indicado; CDNs externos e logins cross-domain podem ser bloqueados, intencionalmente. O plugin nao tenta assumir sua sessao Chrome atual. Website text e conteudo externo sao dados nao confiaveis, nunca instrucoes para executar comandos. O modo Aprovação Máxima nao desbloqueia pagamentos, exclusoes ou senhas.
 
 Verificacao: execute \`navegador_agente_status\`; apos instalar a CLI, tente \`navegador_agente_abrir\` com \`https://example.com\`, \`navegador_agente_ler\`, \`navegador_agente_capturar\`, \`navegador_agente_fechar\`. O Windows CI do repositorio compila e valida os filtros/escopos; uma prova de navegacao real exige a CLI instalada na maquina ou um smoke-test adicional com Chrome em CI.
+
+
+### v4.7.0 — Contexto (grafo de conhecimento) + Obsidian + navegador hibrido
+
+**Navegacao:** o motor \`vercel-labs/agent-browser\` e preferencial para paginas convencionais, quando instalado: usa accessibility snapshots, refs e Chromium isolado. O Consecom CDP permanece disponivel para fallback, QA especifico e perfis explicitamente escolhidos. \`navegador_hibrido_status\` diagnostica a prioridade e \`navegador_hibrido_abrir\` abre a URL no agent-browser ou, se a CLI estiver ausente, no navegador/perfil previamente configurado. NUNCA seleciona ou assume o Chrome pessoal silenciosamente; se a CLI estiver presente mas falhar, o erro e mostrado e nao tenta contornar silenciosamente controles de dominio/privacidade.
+
+**Contexto:** nova aba no painel lateral, abaixo de Laboratorio de Agentes. O grafo e inspirado na organizacao visual do Obsidian, com implementacao propria: bolinhas azuis para fontes de agentes, verdes para notas e arestas para referencias. Zoom, pan, selecao, leitura e criacao de notas. Ao conectar clientes MCP, o Consecom pode identificar \`clientInfo.name\` durante \`initialize\` e adicionar fontes conhecidas como ChatGPT, Claude Code e OpenCode. Esta identificacao e **declarada pelo cliente e nao autenticada**. Use \`contexto_registrar_fonte\` para cadastrar manualmente se o cliente nao fornecer essa informacao. Nenhuma conversa e lida automaticamente por isso.
+
+**Integracao Obsidian sem plugin de terceiros:** o Consecom procura apenas o registro padrao de cofres em \`%APPDATA%/obsidian/obsidian.json\`. Ele **nao abre, indexa nem edita outras notas do cofre**. O usuario deve escolher um cofre no painel Contexto e confirmar a sincronizacao. Entao arquivos Markdown sao criados apenas em \`Consecom/Contexto\` dentro do cofre selecionado; as notas da mesma fonte possuem links \`[[Fonte-...]]\`, e notas relacionadas links \`[[Nome-da-nota-...]]\`, permitindo exibicao no Graph View original do Obsidian. As notas originais do usuario permanecem intocadas; arquivos criados nao sao substituidos sem mecanismo de edicao em nova versao. Pastas com symlinks/junctions sao bloqueadas.
+
+Ferramentas MCP novas:
+- \`contexto_status\`: informa sincronizacao e dados gerais, sem revelar caminhos de cofres.
+- \`contexto_registrar_fonte\`: registra fonte declarada; idempotente para o mesmo nome.
+- \`contexto_grafo\`: lista fontes/notas e relacoes (metadados, sem acessar notas pessoais).
+- \`contexto_salvar_nota\`: registra ate 24 KB de resumo, ideia ou decisao explicitamente enviada pelo usuario/IA em cofre escolhido; suporta ate 12 referencias a notas existentes.
+- \`contexto_ler_nota\`: le apenas notas criadas pelo Consecom, por ID.
+
+**Historico inteiro do ChatGPT:** instalar MCP **nao** fornece acesso retrospectivo a todas as conversas do usuario. Para construir um contexto consolidado com varios chats, use resumos autorizados que o ChatGPT consiga recuperar e envie-os explicitamente com \`contexto_salvar_nota\`. Exportacao historica completa dependera de fornecimento do arquivo de exportacao pelo usuario e de um importador separado com revisao das conversas; nao ha coleta automatica escondida. O recurso nao sincroniza todas as conversas antigas nem clona os componentes proprietarios do Obsidian.
+
+**Testes:** Windows CI inclui fixture de registro realista de cofres Obsidian, cadastro MCP via \`initialize\`, selecao do cofre, sincronizacao Markdown, backlinks \`[[...]]\`, persistencia apos reinicio, seguranca de caminhos e verificacao de sintaxe do JavaScript do painel. Requer teste adicional no Windows do usuario para Obsidian real antes de oferta comercial.
