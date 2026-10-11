@@ -23,7 +23,7 @@ article{border-top:1px solid #2c4252;padding:9px 0}article strong{font-size:12px
 (function(){
 "use strict";
 const box=document.getElementById("events"),status=document.getElementById("status"),automatic=document.getElementById("auto");
-const seen=new Set();let cursor=0,active=true,attempts=0;
+const seen=new Set();let cursor=0,active=true,attempts=0,failures=0;
 const started=Date.now(),MAX_ATTEMPTS=50;
 function notice(s){status.textContent=s}
 function extract(response){
@@ -45,12 +45,11 @@ function ask(ev,manual){
  const fn=window.openai&&window.openai.sendFollowUpMessage,mode=manual?"manual":"auto";
  if(typeof fn!=="function"){notice("Host não disponibilizou o envio de mensagens.");observe(ev,mode,"unavailable");return}
  attempts++;
- observe(ev,mode,"attempt");
  let prompt;
  if(ev.kind==="PANEL_MESSAGE"){
-  prompt="MENSAGEM DO CHAT CONSECOM, digitada pelo usuário na Central de Controle do Windows. ID "+ev.id+".\n\n"+
-  String(ev.message||"")+
-  "\n\nCANAL DE RETORNO: Responda ao pedido normalmente e ANTES de finalizar publique a mesma resposta no painel Windows pela ferramenta MCP consecom_chat_responder, usando id="+ev.id+", texto com a resposta completa e tipo=final. A resposta deve ser uma chamada real de ferramenta, nao apenas uma afirmacao. Para trabalhos longos, publique primeiro tipo=andamento e ao terminar tipo=final. As demais ferramentas do Consecom continuam disponiveis, com as mesmas permissoes. Se a ferramenta de resposta nao aparecer, avise que a lista de ferramentas do MCP precisa ser atualizada; nao simule a entrega.";
+  prompt="Mensagem do usuário enviada pelo chat Consecom. ID: "+ev.id+"\n\n"+
+    String(ev.message||"")+
+    "\n\nResponda ao usuário e publique sua resposta com consecom_chat_responder(id="+ev.id+", texto=RESPOSTA, tipo=final). Para tarefas longas, publique andamento durante a execução. Não simule resultados.";
  }else{
   prompt="Consecom Live LAB: analise o evento sintetico "+ev.id+" com consecom_live_ler_evento. Nao execute comandos nem altere arquivos; registre se este turno surgiu automaticamente.";
  }
@@ -58,7 +57,10 @@ function ask(ev,manual){
  let settled=false;
  setTimeout(function(){if(!settled)observe(ev,mode,"pending")},6000);
  try{
-  Promise.resolve(fn({prompt:prompt,scrollToBottom:false})).then(function(result){
+  // Start the host follow-up BEFORE telemetry: an extra MCP call must not delay the user message.
+  const followUp=fn({prompt:prompt,scrollToBottom:false});
+  observe(ev,mode,"attempt");
+  Promise.resolve(followUp).then(function(result){
    settled=true;
    if(result&&result.isError){observe(ev,mode,"host_rejected");notice("O host recusou "+ev.id+".");return}
    observe(ev,mode,"host_resolved");
@@ -77,12 +79,26 @@ async function claimAndSend(ev,manual){
  if(attempts>=MAX_ATTEMPTS)return;
  const api=window.openai&&window.openai.callTool;
  if(typeof api!=="function"){notice("Ponte de ferramentas indisponível.");return}
- try{
-  const result=extract(await api("consecom_live_assumir_mensagem",{id:ev.id}));
-  if(result&&result.claimed===true){ask(ev,manual)}
-  else notice(ev.id+" já foi assumida por outra janela ou enviada.");
- }catch(err){
-  notice("Não foi possível reservar "+ev.id+": "+String(err&&err.message||err).slice(0,110));
+ // Transient MCP reinitialization must not strand a message as queued forever.
+ // Never retry after a successful claim or a definitive "already claimed" result.
+ for(let retry=0;retry<4;retry++){
+  try{
+   const reply=await api("consecom_live_assumir_mensagem",{id:ev.id});
+   if(reply&&reply.isError)throw new Error("A ferramenta MCP recusou a tentativa.");
+   const result=extract(reply);
+   if(result&&result.claimed===true){ask(ev,manual);return}
+   notice(ev.id+" já foi assumida por outra janela ou enviada.");
+   return;
+  }catch(err){
+   const messageText=String(err&&err.message||err);
+   if(retry===3||!/not initialized|CONFLICT|temporar|unavailable|network|timeout/i.test(messageText)){
+    notice("Não foi possível reservar "+ev.id+": "+messageText.slice(0,110));
+    return;
+   }
+   const retryMs=300*Math.pow(2,retry);
+   notice("MCP reconectando; nova tentativa em "+retryMs+"ms...");
+   await new Promise(resolve=>setTimeout(resolve,retryMs));
+  }
  }
 }
 function show(ev){
@@ -110,6 +126,7 @@ async function poll(){
  while(active){
   try{
    const result=extract(await api("consecom_live_aguardar",{after_sequence:cursor,wait_ms:8000}));
+   failures=0;
    if(result){
     const events=Array.isArray(result.events)?result.events:[];
     for(const ev of events){show(ev);cursor=Math.max(cursor,Number(ev.sequence)||0)}
@@ -118,7 +135,10 @@ async function poll(){
    }
   }catch(err){
    notice("Reconectando ao MCP: "+String(err&&err.message||err).slice(0,135));
-   await new Promise(resolve=>setTimeout(resolve,2500));
+   // Recover quickly from a transient MCP initialization conflict without a busy retry loop.
+   failures=Math.min(failures+1,5);
+   const retryMs=Math.min(2500,400*Math.pow(2,failures-1));
+   await new Promise(resolve=>setTimeout(resolve,retryMs));
   }
  }
 }
