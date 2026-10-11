@@ -203,7 +203,9 @@ func (a *App) contextGraph()(any,error){
 func (a *App) contextStatus()(any,error){
  vs,err:=obsidianVaults();if err!=nil{return nil,err}
  graph,err:=a.contextGraph();if err!=nil{return nil,err}
- return map[string]any{"detected_vaults":vs,"graph":graph,"obsidian_detected":len(vs)>0,
+ index,indexErr:=a.contextIndex()
+ if indexErr!=nil{index=map[string]any{"status":"error","source":indexErr.Error()}}
+ return map[string]any{"detected_vaults":vs,"graph":graph,"index":index,"obsidian_detected":len(vs)>0,
   "notes_sync_requires_selection":true,
   "history_import":"Para reunir conversas antigas do ChatGPT, use um export fornecido pelo usuario ou resumos explicitamente enviados via MCP."},nil
 }
