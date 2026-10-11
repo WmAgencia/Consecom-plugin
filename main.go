@@ -177,6 +177,10 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
         ev,err:=a.live.enqueuePanelMessage(p.Message)
         if err!=nil{respond(w,nil,err);return}
         respond(w,map[string]any{"id":ev.ID,"delivery":ev.Delivery,"created_at":ev.CreatedAt},nil)
+    case "/api/live/chat":
+        if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
+        if a.live==nil{respond(w,nil,errors.New("chat Consecom indisponivel"));return}
+        respond(w,a.live.chatHistory(),nil)
     case "/api/live/messages":
         if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
         if a.live==nil{respond(w,nil,errors.New("fila Consecom Live indisponivel"));return}
