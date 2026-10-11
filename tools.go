@@ -1,6 +1,7 @@
 package main
 
 import (
+ "strconv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,6 +92,16 @@ func tools() []Tool {
 		{"browser_upload_arquivo","Selecionar arquivo autorizado em campo de upload; modo maximo nao exige confirmacao extra. Nao envia formulario.",schema(map[string]any{"root_id":str("ID da pasta"),"caminho":str("Arquivo relativo"),"seletor":str("Seletor CSS do input[type=file]")},"root_id","caminho","seletor"),mutating},
 		{"browser_confirmar_acao","Executar clique para enviar/publicar/excluir; em modo maximo sem confirmacao extra, mantendo validacao de URL/elemento.",schema(map[string]any{"seletor":str("Seletor CSS do botao")},"seletor"),mutating},
 		{"browser_download_copiar","Copiar download privado a projeto autorizado sem sobrescrever; modo maximo executa diretamente.",schema(map[string]any{"nome":str("Nome do download"),"root_id":str("ID da pasta"),"destino":str("Destino relativo")},"nome","root_id","destino"),mutating},
+		{"codigo_buscar","Pesquisar texto em ate 250 arquivos de codigo de um projeto autorizado, retornando trecho e numero da linha.",schema(map[string]any{"root_id":str("ID do projeto"),"termo":str("Termo de busca")}, "root_id","termo"),readonly},
+		{"codigo_ler_trecho","Ler ate 160 linhas de codigo com numero de linha e SHA256 para edicao segura.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"inicio":map[string]any{"type":"integer","minimum":1},"quantidade":map[string]any{"type":"integer","minimum":1,"maximum":160}},"root_id","caminho","inicio","quantidade"),readonly},
+		{"codigo_substituir_trecho","Substituir trecho unico no codigo com SHA256 de versao e backup, dentro de projeto com escrita permitida.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 retornado por codigo_ler_trecho"),"original":str("Texto exato a substituir"),"novo":str("Texto substituto")}, "root_id","caminho","sha256","original","novo"),mutating},
+		{"desktop_controles","Encontrar controles Win32 visiveis associados a uma janela, como botoes, menus e campos.",schema(map[string]any{"window":str("ID da janela")},"window"),readonly},
+		{"desktop_controle_clicar","Clicar no centro de um controle Win32 valido, na propria janela. Respeita modo de aprovacao local.",schema(map[string]any{"window":str("ID da janela"),"controle":str("ID do controle obtido em desktop_controles")},"window","controle"),mutating},
+		{"programas_criativos","Detectar disponibilidade de FFmpeg, FFprobe, Blender, ImageMagick, Python e Node sem executar tarefas.",schema(map[string]any{}),readonly},
+		{"video_inspecionar","Ler metadados de video local do projeto com FFprobe, sem alterar o arquivo.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo .mp4 .mov .mkv .webm")},"root_id","caminho"),readonly},
+		{"fluxo_iniciar","Executar fluxo de 1 a 6 comandos de desenvolvimento permitidos de forma sequencial, verificando cada saida, com cancelamento.",schema(map[string]any{"root_id":str("ID do projeto"),"etapas":map[string]any{"type":"array","minItems":1,"maxItems":6,"items":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}}},"root_id","etapas"),mutating},
+		{"fluxo_status","Verificar etapa, logs recentes e sucesso/falha de um fluxo em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),readonly},
+		{"fluxo_cancelar","Interromper fluxo e sua etapa atualmente em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),mutating},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -113,6 +124,51 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		}
 	}
 	switch name {
+	case "codigo_buscar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		term,e:=argStr(args,"termo");if e!=nil{return nil,e}
+		return a.codeSearch(id,term)
+	case "codigo_ler_trecho":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		var start,count int
+		if e=json.Unmarshal(args["inicio"],&start);e!=nil{return nil,e}
+		if e=json.Unmarshal(args["quantidade"],&count);e!=nil{return nil,e}
+		return a.codeSnippet(id,path,start,count)
+	case "codigo_substituir_trecho":
+		req:=EditorEdit{}
+		var e error
+		req.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		req.Path,e=argStr(args,"caminho");if e!=nil{return nil,e}
+		req.ExpectedSHA,e=argStr(args,"sha256");if e!=nil{return nil,e}
+		req.Old,e=argStr(args,"original");if e!=nil{return nil,e}
+		req.New,e=argStr(args,"novo");if e!=nil{return nil,e}
+		return a.codeEditRequest(req)
+	case "desktop_controles":
+		id,e:=argStr(args,"window");if e!=nil{return nil,e}
+		num,e:=strconv.ParseUint(id,10,64);if e!=nil{return nil,e}
+		return desktopChildControls(num)
+	case "desktop_controle_clicar":
+		id,e:=argStr(args,"window");if e!=nil{return nil,e}
+		child,e:=argStr(args,"controle");if e!=nil{return nil,e}
+		return a.desktopElementClick(id,child)
+	case "programas_criativos":
+		return creativeTools()
+	case "video_inspecionar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		return a.inspectVideo(id,path)
+	case "fluxo_iniciar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		var steps []string
+		if e=json.Unmarshal(args["etapas"],&steps);e!=nil{return nil,e}
+		return a.workflowRequest(id,steps)
+	case "fluxo_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.workflowStatus(id)
+	case "fluxo_cancelar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.workflowCancel(id)
 	case "dev_job_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
@@ -450,6 +506,12 @@ func (a *App) approve(id string) (string, error) {
 		return a.gitBranchApproved(p)
 	case "desktop":
 		return a.approveDesktop(p)
+	case "codeedit":
+		return a.codeEditApproved(p)
+	case "winchild":
+		return a.approveDesktopElement(p)
+	case "workflow":
+		return a.workflowApproved(p)
 	case "browserupload","browserconfirm":
 		return a.approveBrowserTransfer(p)
 	case "browsercopy":
