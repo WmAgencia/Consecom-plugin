@@ -37,7 +37,7 @@ func TestV410ContextUIInfiniteGraphOnly(t *testing.T) {
  }
  for _,part:=range required{if !strings.Contains(uiHTML,part){t.Errorf("missing Contexto UI feature %q",part)}}
  graphStart:=strings.Index(uiHTML,"<section id=\"contextPage\"")
- graphEnd:=strings.Index(uiHTML,"</section>",graphStart)
+ graphEnd:=graphStart+strings.Index(uiHTML[graphStart:],"</section>")
  if graphStart<0||graphEnd<0{t.Fatal("Contexto markup not found")}
  section:=uiHTML[graphStart:graphEnd]
  for _,unwanted:=range []string{"class=\"context-hero\"","class=\"context-explorer\"","class=\"context-detail\"","id=\"contextExplorerTree\""}{
