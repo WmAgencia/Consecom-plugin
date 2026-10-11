@@ -34,7 +34,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <section id="contextPage" class="hidden">
 <header class="top"><div><h1>Contexto</h1><div class="sub">Mapa de conhecimento • fontes MCP, ideias conectadas e notas Markdown sincronizadas ao Obsidian.</div></div><div class="top-actions"><button onclick="reloadContext()">↻ Atualizar</button><button onclick="openContextSource()">＋ Fonte</button><button class="primary" onclick="openContextNote()">＋ Nova ideia</button></div></header>
 <div class="context-header"><div class="context-control"><span class="muted">Cofre Obsidian</span><select id="contextVaultSelect"><option value="">Selecione um cofre detectado</option></select><button onclick="selectContextVault()">Conectar cofre</button><span class="muted" id="contextSync">Sem cofre selecionado</span></div><div class="context-legend"><span><i style="background:#4dc7ff"></i>Cliente MCP</span><span><i style="background:#3ee0af"></i>Ideia / nota</span><span><i style="background:#c098ff"></i>Relação</span></div></div>
-<div class="context-layout"><div class="context-canvas" id="contextCanvas"><svg id="contextSVG" viewBox="0 0 900 610" aria-label="Grafo interativo de fontes e ideias" role="img"></svg><div class="context-empty" id="contextEmpty">Nenhuma fonte registrada ainda.<p>Conecte um cliente MCP ou clique em <strong>＋ Fonte</strong> para começar.</p></div></div><aside class="context-detail"><h3 id="contextDetailTitle">Explorar conhecimento</h3><p class="context-info" id="contextDetailBody">Clique em uma bolinha para ver a fonte ou a ideia. As notas são salvas apenas na pasta Consecom/Contexto do cofre escolhido.</p><div class="context-control" style="margin-top:18px"><button onclick="contextZoom(.8)">＋</button><button onclick="contextZoom(1.25)">−</button><button onclick="contextReset()">◎ Centralizar</button></div><p class="context-meta" id="contextCounters">0 fontes • 0 notas</p><p class="context-meta">O histórico completo do ChatGPT não é transmitido automaticamente. Envie resumos autorizados pelo MCP ou importe um arquivo exportado posteriormente.</p></aside></div>
+<div class="context-layout"><div class="context-canvas" id="contextCanvas"><svg id="contextSVG" viewBox="0 0 900 610" aria-label="Grafo interativo de fontes e ideias" role="img"></svg><div class="context-empty" id="contextEmpty">Nenhuma fonte registrada ainda.<p>Conecte um cliente MCP ou clique em <strong>＋ Fonte</strong> para começar.</p></div></div><aside class="context-detail"><h3 id="contextDetailTitle">Explorar conhecimento</h3><p class="context-info" id="contextDetailBody">Clique em uma bolinha para ver a fonte ou a ideia. As notas são salvas apenas na pasta Consecom/Contexto do cofre escolhido.</p><div class="context-control" style="margin-top:18px"><button onclick="contextZoom(.8)">＋</button><button onclick="contextZoom(1.25)">−</button><button onclick="contextReset()">◎ Centralizar</button><button id="contextOpenObsidian" onclick="openContextInObsidian()" disabled>Abrir no Obsidian ↗</button></div><p class="context-meta" id="contextCounters">0 fontes • 0 notas</p><p class="context-meta">O histórico completo do ChatGPT não é transmitido automaticamente. Envie resumos autorizados pelo MCP ou importe um arquivo exportado posteriormente.</p></aside></div>
 </section>
 </main></div><div class="modalback" id="modalBack" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true"><div id="modalContent"></div><div class="group" style="margin-top:17px"><button onclick="closeModal()">Fechar</button></div></div></div><div id="toast" class="toast"></div><script>
 const KEY='___TOKEN___';let state={roots:[],disks:[],agents:[],mode:'always'};let selectedDisk=0;let fetching=false;let activePage='panel';let agentViews={};let transform={x:0,y:0,z:1};let dragging=null;
@@ -125,6 +125,7 @@ function openModal(which){let root=document.getElementById('modalContent');root.
 if(location.hash==='#agentes')page('lab');else if(location.hash==='#contexto')page('context');else page('panel');refresh();setInterval(refresh,7000);
 
 let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0},contextDrag=null;
+let contextSelectedNote=null;
 function svgElement(tag,attrs){let n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(let k in attrs)n.setAttribute(k,attrs[k]);return n}
 function contextReset(){contextScale=1;contextOffset={x:0,y:0};drawContext()}
 function contextZoom(k){contextScale=Math.max(.5,Math.min(3,contextScale*k));drawContext()}
@@ -147,6 +148,8 @@ function drawContext(){
  g.append(node)});
 }
 function showContextNode(p){
+ contextSelectedNote=p.note||null;
+ document.getElementById('contextOpenObsidian').disabled=!contextSelectedNote||!contextData.vault_selected;
  let name=p.source?p.source.label:p.note.title;
  mark('contextDetailTitle',name);
  if(p.source){let count=(contextData.notes||[]).filter(x=>x.source_id===p.source.id).length;mark('contextDetailBody','Fonte MCP • '+p.source.origin+'\n'+count+' nota(s) vinculada(s).\n\nEsta fonte foi declarada pelo cliente; o nome não comprova a identidade do programa.')}
@@ -174,6 +177,11 @@ async function selectContextVault(){
  let id=document.getElementById('contextVaultSelect').value;if(!id){toast('Selecione um cofre existente',true);return}
  if(!confirm('Permitir ao Consecom criar notas apenas na pasta Consecom/Contexto deste cofre Obsidian?'))return;
  try{await api('contexto/vault/select',{id});toast('Cofre vinculado');await reloadContext()}catch(e){toast(e.message,true)}
+}
+function openContextInObsidian(){
+ if(!contextSelectedNote||!contextData.vault_selected||!contextData.vault_name){toast('Selecione uma nota do cofre conectado',true);return}
+ let relative='Consecom/Contexto/'+contextSelectedNote.filename;
+ location.href='obsidian://open?vault='+encodeURIComponent(contextData.vault_name)+'&file='+encodeURIComponent(relative);
 }
 function contextFormRoot(title){let root=document.getElementById('modalContent');root.replaceChildren();root.append(dom('h2',title));document.getElementById('modalBack').style.display='grid';return root}
 function openContextSource(){
