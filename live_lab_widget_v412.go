@@ -79,12 +79,26 @@ async function claimAndSend(ev,manual){
  if(attempts>=MAX_ATTEMPTS)return;
  const api=window.openai&&window.openai.callTool;
  if(typeof api!=="function"){notice("Ponte de ferramentas indisponível.");return}
- try{
-  const result=extract(await api("consecom_live_assumir_mensagem",{id:ev.id}));
-  if(result&&result.claimed===true){ask(ev,manual)}
-  else notice(ev.id+" já foi assumida por outra janela ou enviada.");
- }catch(err){
-  notice("Não foi possível reservar "+ev.id+": "+String(err&&err.message||err).slice(0,110));
+ // Transient MCP reinitialization must not strand a message as queued forever.
+ // Never retry after a successful claim or a definitive "already claimed" result.
+ for(let retry=0;retry<4;retry++){
+  try{
+   const reply=await api("consecom_live_assumir_mensagem",{id:ev.id});
+   if(reply&&reply.isError)throw new Error("A ferramenta MCP recusou a tentativa.");
+   const result=extract(reply);
+   if(result&&result.claimed===true){ask(ev,manual);return}
+   notice(ev.id+" já foi assumida por outra janela ou enviada.");
+   return;
+  }catch(err){
+   const messageText=String(err&&err.message||err);
+   if(retry===3||!/not initialized|CONFLICT|temporar|unavailable|network|timeout/i.test(messageText)){
+    notice("Não foi possível reservar "+ev.id+": "+messageText.slice(0,110));
+    return;
+   }
+   const retryMs=300*Math.pow(2,retry);
+   notice("MCP reconectando; nova tentativa em "+retryMs+"ms...");
+   await new Promise(resolve=>setTimeout(resolve,retryMs));
+  }
  }
 }
 function show(ev){
