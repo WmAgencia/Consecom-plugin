@@ -140,8 +140,30 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 #contextPage .context-graph-settings{background:#171d28f6;border-color:#394659}
 @media(max-width:850px){#contextPage .context-index-status{right:10px;top:67px;padding:8px 11px;min-width:140px}#contextIndexCount{font-size:11px}}
 
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.12.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
-<section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header>
+
+/* v4.13: local-to-ChatGPT composer, integrated in the existing dashboard */
+.live-compose{margin:15px 0 21px;padding:19px;border:1px solid #246960;border-radius:17px;background:linear-gradient(110deg,#112f35,#12243b 60%,#162744);box-shadow:0 8px 30px #0002}
+.live-compose h2{font-size:19px;font-weight:700;margin:0 0 7px}
+.live-compose .live-sub{font-size:12px;color:#b0ccdc;margin:0 0 13px;line-height:1.6}
+.live-compose textarea{width:100%;min-height:105px;resize:vertical;border:1px solid #365773;border-radius:12px;background:#0c1c2b;color:#f5fcff;font:14px/1.6 'Segoe UI',sans-serif;padding:13px;outline:0}
+.live-compose textarea:focus{border-color:#52d8bc;box-shadow:0 0 0 2px #42cdaa2b}
+.live-compose .live-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:11px 0}
+.live-compose .live-status{font-size:12px;color:#b4cddd;white-space:pre-wrap}
+.live-compose .live-history{display:grid;gap:6px;margin-top:12px;max-height:220px;overflow:auto}
+.live-compose .live-item{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #294c59;border-radius:10px;padding:10px;font-size:12px;background:#0b202e}
+.live-compose .live-item span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-compose .live-item b{font-size:11px;color:#8ddbbf;white-space:nowrap}
+.live-compose .live-item button{font-size:11px;padding:6px 9px}
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.13.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+<section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose"><h2>Mensagem para o ChatGPT <span style="font-size:12px;font-weight:500;color:#86e0c0">Consecom Live</span></h2>
+<p class="live-sub">Envie uma mensagem a partir deste computador usando o mesmo MCP Consecom conectado ao ChatGPT. Mantenha o componente Consecom Live aberto em uma conversa do ChatGPT para receber automaticamente. Se ele estiver fechado, a mensagem permanece aguardando na fila local.</p>
+<label for="liveUserMessage" style="display:block;font-size:12px;margin-bottom:6px">Sua mensagem</label>
+<textarea id="liveUserMessage" maxlength="2000" placeholder="Ex.: ChatGPT, receba esta mensagem enviada pela Central de Controle do Consecom."></textarea>
+<div class="live-actions"><button class="primary" id="liveSendButton" onclick="sendConsecomMessage()">➤ Enviar ao ChatGPT</button><button onclick="refreshConsecomOutbox()">↻ Atualizar fila</button><span id="liveComposeState" class="live-status">Pronto para enviar.</span></div>
+<div class="live-history" id="liveOutbox"><span style="color:#91adbf;font-size:12px">Nenhuma mensagem recente.</span></div>
+<p class="live-sub" style="margin-top:10px">Status “aceita pelo host” não prova que o ChatGPT respondeu. Confira a conversa. O envio não cria outro plugin nem utiliza a API paga.</p>
+</div>
+
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
 <div class="columns"><section class="panel"><div class="panelheader"><span class="section-icon">⬡</span><div><h2>Modo de aprovação e permissões</h2><div class="muted">Decida quando autorizar ações solicitadas pelo ChatGPT.</div></div></div><div class="approval-compact"><div class="approval-levels"><button id="modeAlways" type="button" onclick="setMode('always')">Perguntar sempre</button><button id="modeCategory" type="button" onclick="setMode('category')">Por categoria</button><button id="modeMaximum" type="button" onclick="setMode('maximum')">Aprovação máxima</button></div><input id="modeSlider" type="range" min="0" max="2" step="1" value="0" aria-label="Nível de autonomia do Consecom" oninput="previewModeSlider(this.value)" onchange="commitModeSlider(this.value)"><div class="approval-status"><span id="approvalCurrentName">Perguntar sempre</span><small id="approvalHint">Solicita confirmação para ações no computador</small></div></div><div id="pendingWrap" class="hidden" style="margin-top:16px;padding:12px;background:#122c40;border:1px solid #3d5d73;border-radius:11px"><b id="pendingTitle">Aprovações pendentes</b><div id="pendingList"></div></div></section><section class="panel"><div class="panelheader"><span class="section-icon">▣</span><div><h2>Escopo de acesso</h2><div class="muted">Arquivos e projetos disponíveis pelas permissões escolhidas.</div></div></div><div class="scope"><span class="scope-icon">📁</span><div><strong id="scopeTitle">Pastas aprovadas</strong><p id="scopeDesc">Carregando permissões...</p></div></div><div class="scopeextra" id="scopeActions"><button onclick="openModal('folders')">Gerenciar pastas aprovadas</button></div></section></div>
 <section class="panel lab-preview" style="margin-bottom:14px"><div class="flex-between"><div><div class="panelheader"><span class="section-icon">◉</span><div><h2>Navegador exclusivo do Consecom</h2><div class="muted" id="browserSummary">Sessão exclusiva • Chrome / Edge</div></div></div><div class="sub">Escolha apenas Chrome ou Microsoft Edge. A sessão exclusiva do Consecom é persistente e não acessa cookies, abas ou logins do seu navegador pessoal.</div></div><button onclick="openModal('browser')">⚙ Escolher navegador</button></div></section>
@@ -173,6 +195,53 @@ const KEY='___TOKEN___';let state={roots:[],disks:[],agents:[],mode:'always'};le
 function dom(tag,text,cls){let e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(cls)e.className=cls;return e}
 function toast(msg,bad=false){let e=document.getElementById('toast');e.textContent=msg;e.className='toast'+(bad?' bad':'');e.style.display='block';clearTimeout(window.toastHide);window.toastHide=setTimeout(()=>e.style.display='none',4500)}
 async function api(path,data){let opt={headers:{'X-Local-Key':KEY}};if(data!==undefined){opt.method='POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(data)}let r=await fetch('/api/'+path,opt);let text=await r.text();let v;try{v=JSON.parse(text)}catch{throw Error(text)}if(!r.ok||v.ok===false)throw Error(v.error||'Falha '+r.status);return v}
+
+let liveComposeBusy=false;
+const liveDeliveryNames={queued:"Aguardando ChatGPT",claimed:"Em envio",host_resolved:"Aceita pelo host",host_rejected:"Falha no envio",superseded:"Reenviada"};
+async function sendConsecomMessage(){
+ const input=document.getElementById('liveUserMessage'),btn=document.getElementById('liveSendButton');
+ if(liveComposeBusy)return;
+ const message=input.value.trim();
+ if(!message){toast('Escreva uma mensagem antes de enviar.',true);input.focus();return}
+ if(new TextEncoder().encode(message).length>2000){toast('Mensagem acima do limite de 2.000 bytes.',true);return}
+ liveComposeBusy=true;btn.disabled=true;mark('liveComposeState','Salvando na fila local...');
+ try{
+  const result=(await api('live/send',{message})).result;
+  input.value='';
+  mark('liveComposeState','Mensagem '+result.id+' salva. Aguardando o componente Live no ChatGPT.');
+  toast('Mensagem registrada para envio ao ChatGPT.');
+  await refreshConsecomOutbox();
+ }catch(e){mark('liveComposeState',e.message);toast(e.message,true)}
+ finally{liveComposeBusy=false;btn.disabled=false}
+}
+async function retryConsecomMessage(id){
+ if(!confirm('Esta mensagem será enviada novamente ao ChatGPT. Deseja continuar?'))return;
+ try{const r=(await api('live/retry',{id})).result;toast('Nova tentativa '+r.id+' colocada na fila');await refreshConsecomOutbox()}
+ catch(e){toast(e.message,true)}
+}
+async function refreshConsecomOutbox(){
+ const box=document.getElementById('liveOutbox');
+ if(!box)return;
+ try{
+  const result=(await api('live/messages')).result;
+  const items=result.messages||[];
+  box.replaceChildren();
+  if(!items.length){box.append(dom('small','Nenhuma mensagem recente.'));return}
+  for(const item of items){
+   const line=dom('div',undefined,'live-item'),left=dom('span',item.message||''),side=dom('div');
+   const state=dom('b',(liveDeliveryNames[item.delivery]||item.delivery)+' · '+item.id);
+   side.append(state);
+   if(item.delivery==='claimed'||item.delivery==='host_rejected'){
+    const retry=dom('button','Reenviar');retry.onclick=()=>retryConsecomMessage(item.id);side.append(retry);
+   }
+   side.style.display='flex';side.style.alignItems='center';side.style.gap='9px';
+   line.append(left,side);box.append(line);
+  }
+ }catch(e){box.textContent='Fila indisponível: '+e.message}
+}
+setInterval(()=>{if(activePage==='panel')void refreshConsecomOutbox()},5000);
+void refreshConsecomOutbox();
+
 async function waitForPluginRestart(previousVersion){const until=Date.now()+90000;while(Date.now()<until){await new Promise(resolve=>setTimeout(resolve,1000));try{const r=await fetch('/health?updated='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const body=await r.json();if(body.service==='consecom-mcp'&&body.version!==previousVersion){location.replace('/?updated='+Date.now());return}}catch(e){}}mark('updateSummary','Atualização iniciada. Reabra o painel se ele não reconectar.')}
 async function updateNow(){const btn=document.getElementById('sideUpdateBtn');if(btn.disabled)return;btn.disabled=true;btn.textContent='↻ Verificando...';mark('updateSummary','Buscando atualização oficial...');const previousVersion=state.updates?.version||'';try{let r=(await api('updates/local',{})).result;if(r.status==='sem_atualizacao'){toast('Consecom já está na última versão ('+r.latest+')');mark('updateSummary','Você já está atualizado')}else if(r.status==='iniciada'){toast(r.message||'Instalador validado e iniciado');mark('updateSummary','Aguardando reinício para recarregar o painel...');waitForPluginRestart(previousVersion)}else{toast(r.message||'Atualização solicitada');mark('updateSummary','Aguardando atualização')}}catch(e){toast(e.message,true);mark('updateSummary','Falha: '+e.message)}finally{btn.disabled=false;btn.textContent='↻ Atualizar'}}
 function gb(n){return(Number(n||0)/1073741824).toFixed(1)+' GB'}
