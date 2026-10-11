@@ -12,7 +12,7 @@ func TestV4CatalogAndProjects(t *testing.T){
  for _,n:=range []string{"codigo_buscar","codigo_ler_trecho","codigo_substituir_trecho","desktop_controles","desktop_controle_clicar","programas_criativos","video_inspecionar","fluxo_iniciar","fluxo_status","fluxo_cancelar"} {
   if !names[n]{t.Errorf("ferramenta ausente %s",n)}
  }
- if len(names)!=77{t.Fatalf("esperadas 77 ferramentas, recebidas %d",len(names))}
+ if len(names)!=78{t.Fatalf("esperadas 78 ferramentas, recebidas %d",len(names))}
  a,e:=NewApp(filepath.Join(t.TempDir(),"config.json"));if e!=nil{t.Fatal(e)}
  if _,e=a.codeSearch("root-inexistente","uma busca");e==nil{t.Error("busca ignorou pasta autorizada")}
  if _,e=a.workflowRequest("root-inexistente",[]string{"git_status"});e==nil{t.Error("fluxo ignorou pasta autorizada")}
