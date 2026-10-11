@@ -122,6 +122,24 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .exclusive-browser-choice{display:flex;gap:9px;flex-wrap:wrap;padding:10px 0 12px}
 .exclusive-browser-choice button{flex:1;min-width:160px;padding:13px 15px}
 .exclusive-browser-choice button.selected{border-color:#37d6a9;background:#104d3d;box-shadow:inset 0 0 0 1px #2ac391}
+
+/* Obsidian-like graph with index summary and subdued file node labels */
+#contextPage .context-index-status{position:absolute;top:14px;right:15px;z-index:4;padding:10px 14px;min-width:180px;max-width:260px;background:#101923e8;border:1px solid #354557;border-radius:13px;display:flex;flex-direction:column;gap:3px;backdrop-filter:blur(10px);pointer-events:none}
+#contextIndexCount{font-size:13px;color:#ccece9;letter-spacing:-.1px}
+#contextIndexSubtitle{font-size:10px;color:#90a9bb}
+#contextPage .context-graph-infinite{background-color:#0e1117;background-image:radial-gradient(#293440 0.65px,transparent .65px);background-size:27px 27px;border-color:#2a3341}
+#contextPage .context-edge{stroke:#64758b;stroke-width:.9;opacity:.22}
+#contextPage .context-node.indexed-file circle{stroke:#9bb8c0aa;stroke-width:.4}
+#contextPage .context-node.indexed-file text{opacity:0;font-size:10px;transition:opacity .2s}
+#contextPage .context-node.indexed-file:hover text,#contextPage .context-node.indexed-file:focus text{opacity:1}
+#contextPage .context-node.indexed-folder circle{stroke:#d1bfff8a;stroke-width:1.4;filter:drop-shadow(0 0 8px #836dd533)}
+#contextPage .context-node.indexed-folder text{font-size:12px;fill:#d6cdf5;font-weight:650}
+#contextPage .context-node.vault circle{filter:drop-shadow(0 0 12px #927adb77)}
+#contextPage .context-node.app circle{filter:drop-shadow(0 0 7px #81dccb50)}
+#contextPage .context-graph-preview{background:#151b25f7;border-color:#4b5167}
+#contextPage .context-graph-settings{background:#171d28f6;border-color:#394659}
+@media(max-width:850px){#contextPage .context-index-status{right:10px;top:67px;padding:8px 11px;min-width:140px}#contextIndexCount{font-size:11px}}
+
 </style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.10.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header>
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
@@ -146,7 +164,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
  <div id="contextEmpty" class="context-graph-empty hidden">O grafo aparecerá assim que houver fontes conectadas.<p>Use os cartões de integração acima.</p></div>
  <div id="contextGraphPreview" class="context-graph-preview hidden"><button class="context-preview-close" onclick="contextClosePreview()" aria-label="Fechar prévia">×</button><div id="contextDetailTitle" class="context-preview-title"></div><div id="contextDetailBody" class="context-preview-body"></div><button id="contextOpenObsidian" onclick="openContextInObsidian()" class="hidden">Abrir nota no Obsidian ↗</button></div>
  <div id="contextGraphMenu" class="context-graph-menu hidden"></div>
- <div class="context-graph-caption"><span id="contextCounters">Carregando fontes...</span> <span>· Pastas agrupadas por origem · Arraste, aproxime e explore</span></div>
+ <div class="context-index-status" id="contextIndexStatus"><strong id="contextIndexCount">Indexando...</strong><span id="contextIndexSubtitle">Buscando arquivos do Obsidian</span></div><div class="context-graph-caption"><span id="contextCounters">Carregando fontes...</span> <span>· Pastas agrupadas por origem · Arraste, aproxime e explore</span></div>
 </div>
 <div hidden aria-hidden="true"><select id="contextVaultSelect"></select><button id="contextAutoVaultBtn" onclick="connectObsidianAuto()">Conectar cofre</button><span id="contextHeroState"></span><span id="contextVaultName"></span><span id="contextSync"></span></div>
 </section>
@@ -241,7 +259,7 @@ function closeModal(){document.getElementById('modalBack').style.display='none'}
 function openModal(which){let root=document.getElementById('modalContent');root.replaceChildren();if(which==='connection'){connectionModal(root);}else if(which==='browser'){browserModal(root);}else if(which==='updates'){updatesModal(root).catch(e=>toast(e.message,true));}else if(which==='folders'){root.append(dom('h2','Pastas autorizadas'),dom('p','Adicione apenas pastas de projetos. Acesso de escrita é opcional; no modo máximo o acesso ampliado continua bloqueando caminhos protegidos.'));for(let r of state.roots){let line=dom('div',undefined,'rootline'),info=dom('div');info.append(dom('b',r.name),dom('small',r.path));let btn=dom('button',r.writable?'Desativar escrita':'Habilitar escrita');btn.onclick=async()=>{try{await api('roots/writable',{id:r.id,writable:!r.writable});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};let del=dom('button','Remover');del.onclick=async()=>{if(!confirm('Revogar pasta?'))return;try{await api('roots/delete',{id:r.id});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};line.append(info,btn,del);root.append(line)}let nm=dom('input');nm.placeholder='Nome (ex: Projeto Prospector)';let path=dom('input');path.placeholder='C:\\Projetos ou D:\\Prospector';let add=dom('button','Adicionar pasta','primary');add.onclick=async()=>{try{await api('roots/add',{name:nm.value,path:path.value});toast('Pasta autorizada para leitura');await refresh();openModal('folders')}catch(e){toast(e.message,true)}};root.append(nm,path,add)}document.getElementById('modalBack').style.display='grid'}
 if(location.hash==='#agentes')page('lab');else if(location.hash==='#contexto')page('context');else page('panel');refresh();setInterval(refresh,7000);
 
-let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0};
+let contextData={sources:[],notes:[],index:{}},contextScale=1,contextOffset={x:0,y:0};
 let contextSelectedNote=null,contextDrag=null,contextHoverID=null,contextSelectedID=null;
 let contextGraphNodes=new Map(),contextGraphEdges=[],contextGraphParts=new Map(),contextGraphLines=[];
 let contextGraphWorld=null,contextGraphAnimation=0,contextGraphFrames=0;
@@ -262,47 +280,65 @@ function contextGraphAppID(name){
 function contextGraphBuild(){
  const previous=contextGraphNodes;
  const nodes=new Map(),edges=[];
- function add(id,label,type,ref,color){
-  if(nodes.size>=260)return;
+ function add(id,label,type,ref,color,parent){
+  if(nodes.size>=255)return false;
   const old=previous.get(id),seq=nodes.size;
-  const angle=seq*2.399963229728653;
-  const radius=75+48*Math.sqrt(seq);
-  nodes.set(id,{id,label,type,ref,color,
-   x:old?old.x:600+Math.cos(angle)*radius,
-   y:old?old.y:350+Math.sin(angle)*radius,
+  let angle=seq*2.399963229728653,radius=75+41*Math.sqrt(seq);
+  let x=600+Math.cos(angle)*radius,y=350+Math.sin(angle)*radius;
+  if(parent&&nodes.has(parent)&&!old){
+    const root=nodes.get(parent);
+    const count=[...nodes.values()].filter(x=>x.parent===parent).length;
+    const alpha=count*2.399963229728653;
+    const spread=63+21*Math.sqrt(count);
+    x=root.x+Math.cos(alpha)*spread;y=root.y+Math.sin(alpha)*spread;
+  }
+  nodes.set(id,{id,label,type,ref,color,parent,
+   x:old?old.x:x,y:old?old.y:y,
    vx:old?old.vx:0,vy:old?old.vy:0,pinned:old?old.pinned:false});
+  return true;
  }
- if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#b69bfa');
+ const index=contextData.index||{};
+ if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#bca6ff');
  const items=window.contextIntegrationItems||[];
  for(const app of items){
   if(app.id==='obsidian'||!(app.ready||app.configured||app.observed||app.detected))continue;
-  add('app:'+app.id,app.label,'app',app,'#69cbd1');
+  add('app:'+app.id,app.label,'app',app,'#70cbbd');
  }
- const sources=contextData.sources||[];
- for(const source of sources){
+ for(const source of contextData.sources||[]){
   const id='folder:'+source.id;
-  add(id,source.label,'folder',source,'#a9b9ee');
-  const appID=contextGraphAppID(source.label);
-  const app='app:'+appID;
+  add(id,source.label,'folder',source,'#9bace7','app:'+contextGraphAppID(source.label));
+  const app='app:'+contextGraphAppID(source.label);
   if(nodes.has(app))edges.push({a:app,b:id,type:'category'});
   else if(nodes.has('vault'))edges.push({a:'vault',b:id,type:'category'});
  }
- const notes=(contextData.notes||[]).slice(0,190);
- for(const note of notes){
-  const id='note:'+note.id;
-  add(id,note.title,'note',note,'#75e2ba');
-  if(nodes.has('folder:'+note.source_id))edges.push({a:'folder:'+note.source_id,b:id,type:'category'});
+ const sourceNotes=(contextData.notes||[]).slice(0,100);
+ for(const note of sourceNotes){
+  const id='note:'+note.id,from='folder:'+note.source_id;
+  if(add(id,note.title,'note',note,'#69caa8',from)&&nodes.has(from))edges.push({a:from,b:id,type:'category'});
  }
- for(const note of notes){
-  for(const linkID of note.links||[]){
-   if(nodes.has('note:'+note.id)&&nodes.has('note:'+linkID))
-    edges.push({a:'note:'+note.id,b:'note:'+linkID,type:'link'});
+ for(const note of sourceNotes)for(const linked of note.links||[]){
+  if(nodes.has('note:'+note.id)&&nodes.has('note:'+linked))edges.push({a:'note:'+note.id,b:'note:'+linked,type:'link'});
+ }
+ // Physical Obsidian folders appear as their own clusters. This is a
+ // read-only metadata index, not an import of conversation contents.
+ const folders=(index.folders||[]).slice(0,48);
+ for(const folder of folders){
+  const id='vaultfolder:'+folder.path;
+  if(add(id,folder.name+' · '+folder.count,'indexed-folder',folder,'#ad92eb','vault')&&nodes.has('vault')){
+   edges.push({a:'vault',b:id,type:'category'});
+  }
+ }
+ const knownFolders=new Set(folders.map(f=>f.path));
+ const files=(index.files||[]).filter(f=>knownFolders.has(f.folder)).slice(0,140);
+ for(const file of files){
+  const folderID='vaultfolder:'+file.folder,id='vaultfile:'+file.path;
+  if(add(id,file.title,'indexed-file',file,'#85a8b8',folderID)&&nodes.has(folderID)){
+   edges.push({a:folderID,b:id,type:'category'});
   }
  }
  if(nodes.has('vault')){
   for(const app of items){
    if(app.id==='obsidian'||!app.ready||!nodes.has('app:'+app.id))continue;
-   // These dotted relationships describe local MCP availability, not imported chat history.
    edges.push({a:'vault',b:'app:'+app.id,type:'transport'});
   }
  }
@@ -402,11 +438,11 @@ function drawContext(){
  for(const n of contextGraphNodes.values()){
   const cls='context-node '+n.type;
   const el=svgElement('g',{class:cls,tabindex:'0',role:'button','aria-label':n.label,'data-node':n.id});
-  const size=n.type==='vault'?27:n.type==='app'?19:n.type==='folder'?15:7;
+  const size=n.type==='vault'?26:n.type==='app'?16:n.type==='indexed-folder'?Math.min(23,11+Math.sqrt(n.ref?.count||1)):n.type==='folder'?13:n.type==='indexed-file'?5.5:6;
   const circle=svgElement('circle',{cx:0,cy:0,r:size,fill:n.color});
   const title=svgElement('title',{});title.textContent=n.label;
   circle.append(title);el.append(circle);
-  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,42);
+  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,n.type==='indexed-file'?34:42);
   el.append(label);
   el.addEventListener('pointerenter',()=>{contextHoverID=n.id;contextGraphHighlight()});
   el.addEventListener('pointerleave',()=>{contextHoverID=null;contextGraphHighlight()});
@@ -415,7 +451,9 @@ function drawContext(){
  }
  contextGraphTransform();contextGraphUpdateGeometry();contextGraphHighlight();contextGraphResume();
  document.getElementById('contextEmpty').classList.toggle('hidden',contextGraphNodes.size>0);
- mark('contextCounters',contextGraphNodes.size+' nós · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas registradas');
+ const metadata=contextData.index||{};
+ mark('contextCounters',contextGraphNodes.size+' nós visíveis · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas Consecom');
+ contextIndexBadge(metadata);
 }
 function contextSettingsToggle(){document.getElementById('contextGraphSettings').classList.toggle('hidden')}
 function contextForceChanged(){
@@ -463,8 +501,8 @@ function showContextNode(p){
  const body=document.getElementById('contextDetailBody');
  const open=document.getElementById('contextOpenObsidian');
  const node=p.id?p:{type:p.note?'note':p.source?'folder':p.vault?'vault':'app',ref:p.note||p.source||null,label:p.vault?'Obsidian':p.source?.label||p.note?.title||'Integração',id:''};
- contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:null;
- title.textContent=(node.type==='folder'?'📁 ':node.type==='note'?'◇ ':'◉ ')+node.label;
+ contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:node.type==='indexed-file'?{vaultPath:node.ref.path}:null;
+ title.textContent=((node.type==='folder'||node.type==='indexed-folder')?'◈ ':node.type==='note'||node.type==='indexed-file'?'◇ ':'◉ ')+node.label;
  open.classList.toggle('hidden',!contextSelectedNote||!contextData.vault_selected);
  preview.classList.remove('hidden');
  if(node.type==='vault'){
@@ -474,7 +512,11 @@ function showContextNode(p){
  }else if(node.type==='folder'){
   const count=(contextData.notes||[]).filter(n=>n.source_id===node.ref?.id).length;
   body.textContent='Pasta lógica: '+node.label+'\nFonte: '+(node.ref?.origin||'MCP')+'\n'+count+' nota(s) cadastrada(s).\n\nAs fontes aparecem agrupadas por origem. Um nó não comprova que todos os históricos do aplicativo já foram importados.';
- }else if(node.type==='note'){
+ }else if(node.type==='indexed-folder'){
+  body.textContent='Pasta do Obsidian: '+node.ref.path+'\n'+node.ref.count+' arquivos Markdown indexados neste grupo.\n\nClique em outras bolinhas para explorar arquivos; o Consecom não abriu o conteúdo das notas.';
+ }else if(node.type==='indexed-file'){
+  body.textContent='Arquivo Markdown detectado no cofre:\n'+node.ref.path+'\n\nIndexado por nome e localização. O conteúdo da nota não foi importado automaticamente.';
+  }else if(node.type==='note'){
   body.textContent='Lendo nota registrada...';
   const id=node.ref?.id;
   if(id)api('contexto/note/read',{id}).then(r=>{
@@ -574,11 +616,45 @@ document.addEventListener('keydown',e=>{
  }
 });
 
-async function reloadContext(){
+async 
+function contextIndexBadge(index){
+ const count=document.getElementById('contextIndexCount');
+ const subtitle=document.getElementById('contextIndexSubtitle');
+ if(!count||!subtitle)return;
+ if(index.status==='ready'){
+  count.textContent=(index.total||0).toLocaleString('pt-BR')+' arquivos indexados';
+  subtitle.textContent=(index.folders||[]).length+' pastas exibidas · '+(index.complete?'varredura concluída':'índice parcial');
+ }else if(index.status==='indexing'){
+  count.textContent='Indexando Obsidian...';
+  subtitle.textContent='Lendo somente nomes e pastas · segundo plano';
+ }else{
+  count.textContent='Sem índice disponível';
+  subtitle.textContent=index.source||'Conecte o Obsidian';
+ }
+}
+let contextIndexPolling=false;
+async function refreshContextIndex(){
+ if(contextIndexPolling||activePage!=='context'||!contextData.vault_selected)return;
+ contextIndexPolling=true;
+ try{
+  const result=(await api('contexto/indice')).result;
+  const old=contextData.index||{};
+  const previous=old.status+':'+old.total+':'+(old.folders||[]).length;
+  contextData.index=result||{};
+  contextIndexBadge(contextData.index);
+  const next=contextData.index.status+':'+contextData.index.total+':'+(contextData.index.folders||[]).length;
+  if(previous!==next)drawContext();
+ }catch(e){contextIndexBadge({status:'error',source:e.message})}
+ finally{contextIndexPolling=false}
+}
+setInterval(()=>{if(activePage==='context'&&contextData.index?.status==='indexing')refreshContextIndex()},1800);
+setInterval(()=>{if(activePage==='context')refreshContextIndex()},90000);
+function reloadContext(){
  return (async()=>{
  try{
  const r=(await api('contexto')).result;
  contextData=r.graph||{sources:[],notes:[]};
+ contextData.index=r.index||{};
  const select=document.getElementById('contextVaultSelect');
  const previous=select.value;select.replaceChildren();
  const ph=dom('option','Cofres detectados');ph.value='';select.append(ph);
@@ -596,9 +672,8 @@ async function reloadContext(){
  const btn=document.getElementById('contextAutoVaultBtn');
  btn.textContent=contextData.vault_selected?'✓ Reconectar':'Conectar automaticamente';
  btn.disabled=!r.obsidian_detected;
- drawContext();
- drawContext();
  await loadContextIntegrations();
+ if(contextData.index.status==='indexing')setTimeout(refreshContextIndex,2100);
  }catch(e){toast('Contexto: '+e.message,true)}
  })()
 }async function selectContextVault(){
@@ -693,7 +768,7 @@ function renderContextExplorer(){
 
 function openContextInObsidian(){
  if(!contextSelectedNote||!contextData.vault_selected||!contextData.vault_name){toast('Selecione uma nota do cofre conectado',true);return}
- let relative='Consecom/Contexto/'+contextSelectedNote.filename;
+ let relative=contextSelectedNote.vaultPath||('Consecom/Contexto/'+contextSelectedNote.filename);
  location.href='obsidian://open?vault='+encodeURIComponent(contextData.vault_name)+'&file='+encodeURIComponent(relative);
 }
 function contextFormRoot(title){let root=document.getElementById('modalContent');root.replaceChildren();root.append(dom('h2',title));document.getElementById('modalBack').style.display='grid';return root}
