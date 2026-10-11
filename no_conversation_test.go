@@ -29,7 +29,7 @@ func TestConversationFeatureCompletelyRemoved(t *testing.T) {
         if record.Code != http.StatusNotFound { t.Errorf("rota removida %s retornou HTTP %d", route, record.Code) }
     }
     tools := tools()
-    if len(tools) != 96 { t.Errorf("esperadas 96 ferramentas MCP, foram %d", len(tools)) }
+    if len(tools) != 98 { t.Errorf("esperadas 98 ferramentas MCP, foram %d", len(tools)) }
     for _, tool := range tools {
         if tool.Name == "tarefas_listar" || tool.Name == "tarefas_responder" {
             t.Errorf("ferramenta de conversa ainda disponivel: %s", tool.Name)
