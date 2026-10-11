@@ -23,7 +23,7 @@ func testProjectV45(t *testing.T)(*App,Root){
 }
 
 func TestPhase2BrowserQAToolSchemas(t *testing.T){
- names:=map[string]bool{"browser_qa_auditar":true,"browser_qa_responsivo":true}
+ names:=map[string]bool{"browser_qa_auditar":true,"browser_qa_responsivo":true,"browser_qa_erros":true}
  for _,item:=range tools(){
   if !names[item.Name]{continue}
   if item.Annotations["readOnlyHint"]!=true{t.Fatalf("QA tool should be read-only: %s",item.Name)}
@@ -103,4 +103,20 @@ func TestPhase3And4ReadOnlyMetadata(t *testing.T){
   delete(need,tool.Name)
  }
  if len(need)>0{t.Fatalf("missing tools: %v",need)}
+}
+
+
+func TestBrowserQARecorderDoesNotExportConsolePayloads(t *testing.T){
+ if !strings.Contains(browserQARecorderScript,"console.error")||!strings.Contains(browserQARecorderReadScript,"categories"){
+  t.Fatal("console error recorder missing")
+ }
+ if strings.Contains(browserQARecorderReadScript,"JSON.stringify(args)")||strings.Contains(browserQARecorderReadScript,"document.cookie"){
+  t.Fatal("QA recorder may expose sensitive content")
+ }
+ found:=false
+ for _,tool:=range tools(){if tool.Name=="browser_qa_instrumentar"{
+  found=true
+  if tool.Annotations["readOnlyHint"]!=false{t.Fatal("runtime instrumentation is not truly read-only")}
+ }}
+ if !found{t.Fatal("QA instrumentation not found")}
 }
