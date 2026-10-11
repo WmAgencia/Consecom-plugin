@@ -13,7 +13,7 @@ func TestConsecomSessionOnboardingHasCopyablePrompt(t *testing.T){
   "onclick=\"copyConsecomSetupPrompt()\"",
   "async function copyConsecomSetupPrompt()",
   "navigator.clipboard.writeText(prompt)",
-  "consecom_live_abrir com modo=&#34;mensagens&#34;",
+  "consecom_live_abrir com modo=\"mensagens\"",
   "consecom_chat_responder",
   "consecom_chat_historico",
   "atualizacao_status",
