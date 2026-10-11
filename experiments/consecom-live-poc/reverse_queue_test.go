@@ -110,7 +110,9 @@ func TestReverseHTTPMCPWaitAndEmit(t *testing.T){
  var eventObj event
  if err:=json.Unmarshal(rpc.Result.StructuredContent["event"],&eventObj);err!=nil{t.Fatal(err)}
  if status!="event"||eventObj.ID!="evt-000001"{t.Fatalf("bad wake: %s",reply)}
- if elapsed:=time.Since(started);elapsed>3*time.Second{t.Fatalf("reverse transport too slow: %s",elapsed)}
+ elapsed:=time.Since(started)
+ t.Logf("MCP synthetic event wake after %dms (includes 80ms simulated emit delay)",elapsed.Milliseconds())
+ if elapsed>3*time.Second{t.Fatalf("reverse transport too slow: %s",elapsed)}
 }
 func TestReverseJournalFailurePreventsEvent(t *testing.T){
  dir:=t.TempDir()
