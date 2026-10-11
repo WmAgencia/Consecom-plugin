@@ -209,6 +209,14 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
         var p struct{ID string `json:"id"`}
         if !decode(w,r,&p){return}
         v,e:=a.contextConnectIntegration(p.ID);respond(w,v,e)
+    case "/api/contexto/integracoes/indexar":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{ID string `json:"id"`}
+        if !decode(w,r,&p){return}
+        v,e:=a.contextIndexIntegration(p.ID);respond(w,v,e)
+    case "/api/contexto/vault/auto":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        v,e:=a.contextVaultAuto();respond(w,v,e)
     case "/api/contexto/vault/select":
         if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
         var p struct{ID string `json:"id"`}
