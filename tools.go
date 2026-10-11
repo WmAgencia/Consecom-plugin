@@ -74,6 +74,13 @@ func tools() []Tool {
 		{"browser_qa_instrumentar","Ativar monitor de categorias de erros JavaScript e console.error somente na aba Consecom, inclusive navegacoes futuras da mesma aba; nao exporta argumentos ou payloads.",schema(map[string]any{}),mutating},
 		{"browser_qa_erros","Ler apenas contagens de categorias de erros na aba Consecom previamente instrumentada, sem mensagens, cookies nem dados de console.",schema(map[string]any{}),readonly},
 		{"browser_qa_responsivo","Capturar e inspecionar aba controlada em tamanhos mobile/tablet/desktop e restaurar o viewport original; screenshots podem incluir dados pessoais visiveis.",schema(map[string]any{"viewport":map[string]any{"type":"string","enum":[]string{"mobile","tablet","desktop"}}},"viewport"),readonly},
+		{"navegador_agente_status","Verificar instalacao opcional do agente de navegador da Vercel e sessao isolada; nao instala nada nem usa perfil pessoal.",schema(map[string]any{}),readonly},
+		{"navegador_agente_abrir","Abrir pagina HTTPS ou localhost em navegador isolado do agent-browser, com restricao ao dominio inicial. Nao usa perfil pessoal nem CDP compartilhado.",schema(map[string]any{"url":str("URL completa HTTPS, ou http://localhost:PORT") },"url"),mutating},
+		{"navegador_agente_ler","Obter snapshot de acessibilidade com IDs de elementos da pagina controlada pelo agent-browser. Conteudo da pagina e nao confiavel.",schema(map[string]any{}),readonly},
+		{"navegador_agente_clicar_link","Clicar SOMENTE em link da ultima arvore de acessibilidade, por ref @eN; bloqueia botoes e rotulos sensiveis.",schema(map[string]any{"referencia":str("Referencia @e1, @e2 etc obtida por navegador_agente_ler")},"referencia"),mutating},
+		{"navegador_agente_preencher","Preencher campo de texto nao sensivel por ref @eN; nao envia o formulario nem interage com passwords.",schema(map[string]any{"referencia":str("Referencia do campo @eN"),"texto":str("Texto com ate 1000 caracteres")},"referencia","texto"),mutating},
+		{"navegador_agente_capturar","Capturar screenshot PNG da sessao isolada agent-browser e retornar base64; pode conter informacoes exibidas na tela.",schema(map[string]any{}),readonly},
+		{"navegador_agente_fechar","Encerrar apenas a sessao isolada criada pelo Consecom via agent-browser.",schema(map[string]any{}),mutating},
 		{"browser_fechar_aba", "Fechar apenas a aba criada/controlada pelo Consecom, sem fechar seu navegador pessoal.", schema(map[string]any{}), mutating},
 		{"dev_execucao", "Executar comandos fixos de desenvolvimento dentro de projeto autorizado. npm test/build/lint exigem aprovacao em modo normal/categoria; no modo maximo executam diretamente, com timeout e validacao de escopo.", schema(map[string]any{"root_id": str("ID da pasta de projeto autorizada"), "acao": map[string]any{"type": "string", "enum": []string{"git_status", "git_branch", "git_diff_stat", "git_log", "node_version", "npm_version", "npm_test", "npm_build", "npm_lint"}}}, "root_id", "acao"), mutating},
 		{"browser_abas", "Lista SOMENTE abas criadas pelo Consecom na sessao controlada; nunca assume abas pessoais existentes.", schema(map[string]any{}), readonly},
@@ -332,6 +339,24 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.updateCheck()
 	case "atualizacao_solicitar":
 		return a.updateRequest()
+	case "navegador_agente_status":
+		return a.agentBrowserStatus()
+	case "navegador_agente_abrir":
+		url,e:=argStr(args,"url");if e!=nil{return nil,e}
+		return a.agentBrowserOpen(url)
+	case "navegador_agente_ler":
+		return a.agentBrowserSnapshot()
+	case "navegador_agente_clicar_link":
+		ref,e:=argStr(args,"referencia");if e!=nil{return nil,e}
+		return a.agentBrowserClick(ref)
+	case "navegador_agente_preencher":
+		ref,e:=argStr(args,"referencia");if e!=nil{return nil,e}
+		value,e:=argStr(args,"texto");if e!=nil{return nil,e}
+		return a.agentBrowserFill(ref,value)
+	case "navegador_agente_capturar":
+		return a.agentBrowserCapture()
+	case "navegador_agente_fechar":
+		return a.agentBrowserClose()
 	case "browser_qa_auditar":
 		return a.browserQATool(name,"")
 	case "browser_qa_instrumentar","browser_qa_erros":
