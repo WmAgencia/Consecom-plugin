@@ -293,6 +293,20 @@ func respond(w http.ResponseWriter, result any, e error) {
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", a.mcpHandler)
+	mux.HandleFunc("/chat-ui.css", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		b, err := chatAssets.ReadFile("chat_ui.css")
+		if err != nil { http.Error(w, "Recurso indisponivel", 500); return }
+		_, _ = w.Write(b)
+	})
+	mux.HandleFunc("/chat-ui.js", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		b, err := chatAssets.ReadFile("chat_ui.js")
+		if err != nil { http.Error(w, "Recurso indisponivel", 500); return }
+		_, _ = w.Write(b)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
