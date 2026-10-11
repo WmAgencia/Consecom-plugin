@@ -2,37 +2,25 @@ package main
 
 import "errors"
 
-// Hybrid routing prefers the accessibility-first engine for isolated,
-// non-authenticated web navigation. Native CDP is the fallback when the
-// optional CLI is absent and a trusted browser/profile was selected.
+// The selected Chrome/Edge managed profile is the only default browser route.
+// Agent-browser remains available through explicit agent-browser tools; it
+// never silently overrides the user's exclusive managed browser choice.
 func (a *App) hybridBrowserStatus()(any,error){
- _,_,e:=agentBrowserResolve()
- active:=a.browserStatus()
- engine:="agent-browser"
- reason:="CLI instalada: prefere refs de acessibilidade e sessoes isoladas"
- if e!=nil{
-  engine="consecom-cdp"
-  reason="agent-browser ausente: navegador nativo CDP continua disponivel"
- }
+ _,_,agentErr:=agentBrowserResolve()
  return map[string]any{
-  "primary_engine":engine,"fallback_engine":"consecom-cdp",
-  "agent_browser_installed":e==nil,"native_browser":active,
-  "policy":"Agent-browser primeiro para acessibilidade em paginas comuns; Consecom CDP para perfis autorizados, QA nativo e fallback. Sem troca silenciosa de perfil pessoal.",
-  "reason":reason,
+  "primary_engine":"consecom-cdp",
+  "fallback_engine":"none",
+  "agent_browser_installed":agentErr==nil,
+  "native_browser":a.browserStatus(),
+  "policy":"Chrome ou Edge com perfil Consecom exclusivo; agent-browser apenas em ferramentas explicitas.",
+  "reason":"O navegador selecionado no painel e persistido e usado por padrao.",
  },nil
 }
 func (a *App) hybridBrowserOpen(raw string)(any,error){
- // Validate both pathways before choosing an engine.
  clean,_,err:=agentBrowserURL(raw);if err!=nil{return nil,err}
- _,_,installedErr:=agentBrowserResolve()
- if installedErr==nil{
-  result,err:=a.agentBrowserOpen(clean)
-  if err!=nil{return nil,err}
-  return map[string]any{"engine":"agent-browser","result":result},nil
- }
  pref:=a.getBrowserPreference()
  if pref.Browser==""||pref.Profile==""{
-  return nil,errors.New("Agent-browser nao instalado e nenhum navegador/perfil padrao definido. Instale a CLI ou escolha Chrome/Edge e perfil no painel.")
+  return nil,errors.New("Nenhum navegador Chrome/Edge disponivel; instale um para usar a sessao exclusiva Consecom")
  }
  result,err:=a.browserOpen(clean,pref.Browser,pref.Profile)
  if err!=nil{return nil,err}
