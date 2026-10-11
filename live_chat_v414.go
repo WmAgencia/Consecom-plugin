@@ -39,6 +39,7 @@ type LiveChatEntry struct {
  Text string `json:"text"`
  CreatedAt string `json:"created_at"`
  Status string `json:"status"`
+ DispatchedAt string `json:"dispatched_at,omitempty"`
 }
 
 func (b *LiveLab) loadChatReplies()error{
@@ -129,7 +130,7 @@ func (b *LiveLab) chatHistory()map[string]any{
   if ev.Kind!="PANEL_MESSAGE"{continue}
   status:=ev.Delivery
   if answered[ev.ID]{status="answered"}
-  records=append(records,LiveChatEntry{ID:ev.ID,EventID:ev.ID,Role:"user",Kind:"message",Text:ev.Message,CreatedAt:ev.CreatedAt,Status:status})
+  records=append(records,LiveChatEntry{ID:ev.ID,EventID:ev.ID,Role:"user",Kind:"message",Text:ev.Message,CreatedAt:ev.CreatedAt,Status:status,DispatchedAt:ev.FollowUpAt})
  }
  for _,reply:=range b.replies{
   records=append(records,LiveChatEntry{ID:reply.ID,EventID:reply.EventID,Role:"assistant",Kind:reply.Kind,Text:reply.Text,CreatedAt:reply.CreatedAt,Status:"published"})
