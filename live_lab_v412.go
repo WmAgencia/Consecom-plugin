@@ -175,10 +175,17 @@ func (b *LiveLab) reportsView()map[string]any{
   "note":"host_resolved does not mean a new model turn started",
  }
 }
-func liveToolSpecs()[]Tool{
+type LiveTool struct{
+ Name string `json:"name"`
+ Description string `json:"description"`
+ InputSchema map[string]any `json:"inputSchema"`
+ Annotations map[string]any `json:"annotations"`
+ Meta map[string]any `json:"_meta,omitempty"`
+}
+func liveToolSpecs()[]LiveTool{
  readonly:=map[string]any{"readOnlyHint":true,"openWorldHint":false}
  obs:=map[string]any{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false}
- base:=[]Tool{
+ base:=[]LiveTool{
   {Name:"consecom_live_abrir",Description:"Abrir Consecom Live LAB no MESMO Consecom MCP conectado. Exibe eventos sinteticos e testa tentativa automatica de nova mensagem sem clique. Nenhum comando real e executado.",InputSchema:schema(map[string]any{}),Annotations:readonly,
    Meta:map[string]any{"ui":map[string]any{"resourceUri":liveResourceURI},"openai/outputTemplate":liveResourceURI}},
   {Name:"consecom_live_status",Description:"Consultar eventos SINTETICOS do Consecom Live LAB sem acessar arquivos do PC.",InputSchema:schema(map[string]any{
