@@ -1,0 +1,81 @@
+name: Agent Browser real smoke test (Windows)
+on:
+  push:
+    branches:
+      - feature/v4.6-agent-browser-bridge
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - name: Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned upstream agent-browser
+        shell: pwsh
+        run: |
+          npm install -g agent-browser@0.39.0
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          agent-browser install
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Exercise actual browser navigation, element ref click, fill and screenshot
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'consecom-agent-fixture.cjs'
+          @'
+          const http=require('node:http');
+          const port=Number(process.argv[2]);
+          http.createServer((req,res)=>{
+            res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});
+            if(req.url==='/details'){
+              res.end('<html><body><h1>PAGINA DETALHES</h1></body></html>');
+            } else {
+              res.end('<html><body><a href="/details">Detalhes</a><label for="busca">Busca</label><input id="busca" type="text"></body></html>');
+            }
+          }).listen(port,'127.0.0.1');
+          '@ | Set-Content -Path $fixture -Encoding UTF8
+          $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $listener.Start()
+          $port = $listener.LocalEndpoint.Port
+          $listener.Stop()
+          $server = Start-Process -FilePath 'node.exe' -ArgumentList @($fixture,$port) -WindowStyle Hidden -PassThru
+          try {
+            Start-Sleep -Seconds 2
+            $domain = '127.0.0.1'
+            $url = "http://127.0.0.1:$port"
+            agent-browser --session consecom-v46-ci --allowed-domains $domain --max-output 14000 open $url
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser open failed' }
+            $snapshot = agent-browser --session consecom-v46-ci --allowed-domains $domain snapshot -i
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser snapshot failed' }
+            $snapshotText = ($snapshot -join " ")
+            if ($snapshotText -notmatch 'Detalhes' -or $snapshotText -notmatch 'Busca') {
+              throw "Accessibility snapshot lacks expected fixture elements: $snapshotText"
+            }
+            $inputLine = ($snapshot | Where-Object { $_ -match 'textbox.*Busca' } | Select-Object -First 1)
+            $inputRef = [regex]::Match($inputLine,'ref=(e[0-9]+)')
+            if (-not $inputRef.Success) { throw "Agent-browser input ref not found: $inputLine" }
+            agent-browser --session consecom-v46-ci --allowed-domains $domain fill ("@" + $inputRef.Groups[1].Value) "teste-consecom"
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser fill failed' }
+            $filled = (agent-browser --session consecom-v46-ci --allowed-domains $domain get value ("@" + $inputRef.Groups[1].Value)) -join " "
+            if ($LASTEXITCODE -ne 0 -or $filled -notmatch 'teste-consecom') { throw "Input fill was not confirmed: $filled" }
+            $linkLine = ($snapshot | Where-Object { $_ -match 'link.*Detalhes' } | Select-Object -First 1)
+            $linkRef = [regex]::Match($linkLine,'ref=(e[0-9]+)')
+            if (-not $linkRef.Success) { throw "Agent-browser link ref not found: $linkLine" }
+            agent-browser --session consecom-v46-ci --allowed-domains $domain click ("@" + $linkRef.Groups[1].Value)
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser click failed' }
+            $after = (agent-browser --session consecom-v46-ci --allowed-domains $domain snapshot) -join " "
+            if ($LASTEXITCODE -ne 0 -or $after -notmatch 'PAGINA DETALHES') {
+              throw "Agent-browser navigation did not reach /details: $after"
+            }
+            $screen = Join-Path $env:RUNNER_TEMP 'consecom-agent-screen.png'
+            agent-browser --session consecom-v46-ci --allowed-domains $domain screenshot $screen
+            if ($LASTEXITCODE -ne 0 -or -not (Test-Path $screen)) { throw 'agent-browser screenshot failed' }
+            agent-browser --session consecom-v46-ci --allowed-domains $domain close
+            if ($LASTEXITCODE -ne 0) { throw 'agent-browser close failed' }
+          } finally {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+          }

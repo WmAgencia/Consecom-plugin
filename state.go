@@ -39,6 +39,7 @@ type App struct {
 	startedAt      time.Time
 	agents         map[string]*Agent
 	browserControl BrowserControl
+	agentBrowser AgentBrowserSession
 	devJobs DevJobManager
 	devPreviews DevPreviewManager
 	workflows WorkflowManager

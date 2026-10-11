@@ -10,7 +10,7 @@ func TestV3ToolCatalog(t *testing.T){
  required:=[]string{"dev_job_iniciar","dev_job_status","dev_job_cancelar","git_patch_validar","git_patch_aplicar","git_patch_reverter","git_branch_criar","desktop_janelas","desktop_abrir","desktop_ativar","desktop_clicar","desktop_digitar","desktop_capturar","desktop_ultima_captura","browser_habilitar_downloads","browser_downloads","browser_upload_arquivo","browser_confirmar_acao","browser_download_copiar"}
  found:=map[string]bool{}
  for _,x:=range tools(){found[x.Name]=true}
- if len(tools())!=98{t.Fatalf("98 ferramentas esperadas, recebeu %d",len(tools()))}
+ if len(tools())!=105{t.Fatalf("105 ferramentas esperadas, recebeu %d",len(tools()))}
  for _,name:=range required{if !found[name]{t.Errorf("ferramenta ausente %s",name)}}
  if found["tarefas_listar"]||found["tarefas_responder"]{t.Error("ferramentas de conversa antigas retornaram")}
 }

@@ -157,3 +157,30 @@ Esta versao evolui as tres etapas em cima do servidor de previa v4.4.0. Ferramen
 - **Vinculos para deploy:** \`dev_servicos_associar\` armazena apenas identificadores de repositorio GitHub, projeto/equipe Vercel, ref Supabase, projeto Railway e ambiente do workspace. \`dev_servicos_inspecionar\` consulta a associacao e \`dev_deploy_preflight\` verifica pasta autorizada, Git status limpo e destinos definidos. Os IDs fornecidos **nao sao validados remotamente pelo plugin**: o ChatGPT deve verificá-los pelos conectores GitHub/Vercel/Supabase/Railway e usar seus respectivos escopos para deploy. Nenhuma chave, token ou .env e lida, persistida ou transferida. O Consecom **nao executa deploy em nuvem autonomamente** e o ambiente production exige revisao independente.
 
 Limites atuais e proximos passos: Browser QA e baseado em CDP e nao substitui Lighthouse, axe-core nem suite Playwright completa. Pipeline de reparo e assistido pelo ChatGPT, nao um agente LLM independente rodando em background. Vinculos cloud sao referencias e preflight local, nao autenticação ou deploy; os conectores oficiais realizam as acoes depois que o ChatGPT valida os destinos. Testes de integracao no computador real exigem cadastrar um projeto temporario no painel local. Sem isso, apenas os testes do GitHub Actions Windows estao disponiveis.
+
+
+### v4.6.0 — Integracao opcional com agent-browser (Vercel Labs)
+
+**Fonte oficial**: https://github.com/vercel-labs/agent-browser (licenca Apache-2.0; software de terceiro, nao incluido no instalador Consecom). O link https://github.com/topics/agentic-browser e uma *colecao* de repositorios, nao uma ferramenta instalavel. Foi escolhido o \`vercel-labs/agent-browser\` por oferecer CLI de navegacao com arvore de acessibilidade e referencias de elementos.
+
+Instalacao local da CLI no Windows (necessita Node.js e npm compativeis com a versao da CLI):
+
+\`\`\`powershell
+npm install -g agent-browser
+agent-browser install
+\`\`\`
+
+O segundo comando baixa o Chrome for Testing necessario quando nao existe um navegador adequado. Nenhum desses comandos e executado automaticamente pelo Consecom. O motor externo usa memoria/CPU/disco do cliente.
+
+Novas ferramentas:
+- \`navegador_agente_status\`: detecta a CLI opcional e indica estado da sessao.
+- \`navegador_agente_abrir\`: cria uma sessao independente de Chromium, visivel ("headed"), com dominio limitado e sem copiar credenciais/perfil pessoal. Aceita HTTPS e HTTP local explicitamente em 127.0.0.1 ou localhost (porta obrigatoria para localhost). Nao aceita IPs de rede privada, URL com usuario/senha, query string ou fragmento.
+- \`navegador_agente_ler\`: obtem accessibility snapshot apenas da aba do Consecom, com refs \`@eN\`.
+- \`navegador_agente_clicar_link\`: somente em links da ultima captura. Requer ref valida e barra links com rotulos de pagamento, exclusao, publicacao, envio etc. Botoes e submit devem usar fluxo de aprovacao independente.
+- \`navegador_agente_preencher\`: apenas textbox/searchbox/input da ultima captura; campos de senha, cartao e token bloqueados. Nao envia formularios.
+- \`navegador_agente_capturar\`: faz screenshot PNG efemero e retorna base64 com limite de 1,1 MiB.
+- \`navegador_agente_fechar\`: fecha somente a sessao isolada criada pelo Consecom.
+
+Limites: o mecanismo de navegacao inteligente utiliza o **ChatGPT para decidir quais refs clicar**, nao inclui IA da Vercel nem executa a funcao \`chat\` externa do agent-browser. Cada sessao e restrita ao dominio indicado; CDNs externos e logins cross-domain podem ser bloqueados, intencionalmente. O plugin nao tenta assumir sua sessao Chrome atual. Website text e conteudo externo sao dados nao confiaveis, nunca instrucoes para executar comandos. O modo Aprovação Máxima nao desbloqueia pagamentos, exclusoes ou senhas.
+
+Verificacao: execute \`navegador_agente_status\`; apos instalar a CLI, tente \`navegador_agente_abrir\` com \`https://example.com\`, \`navegador_agente_ler\`, \`navegador_agente_capturar\`, \`navegador_agente_fechar\`. O Windows CI do repositorio compila e valida os filtros/escopos; uma prova de navegacao real exige a CLI instalada na maquina ou um smoke-test adicional com Chrome em CI.
