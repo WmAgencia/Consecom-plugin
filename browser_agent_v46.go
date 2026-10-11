@@ -34,8 +34,7 @@ var agentBrowserUnsafeRE=regexp.MustCompile(`(?i)(password|senha|passphrase|cred
 var agentBrowserDomainRE=regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`)
 
 func agentBrowserURL(raw string)(string,string,error){
- if len(raw)>1500||strings.ContainsAny(raw,"
-	") {return "","",errors.New("URL invalida ou muito longa")}
+ if len(raw)>1500||strings.ContainsAny(raw,string(rune(13))+string(rune(10))+string(rune(9))) {return "","",errors.New("URL invalida ou muito longa")}
  u,e:=url.Parse(raw)
  if e!=nil||u==nil||u.User!=nil||u.RawQuery!=""||u.Fragment!=""||u.Opaque!=""{
   return "","",errors.New("URL invalida: nao inclua credenciais, query ou fragmento")}
@@ -151,8 +150,7 @@ func (a *App) agentBrowserSnapshot()(any,error){
 func agentBrowserRefLine(snapshot,ref string)(string,error){
  if !agentBrowserRefRE.MatchString(ref){return "",errors.New("ref invalida; esperado @e1, @e2 etc")}
  needle:="ref="+strings.TrimPrefix(ref,"@")
- for _,line:=range strings.Split(snapshot,"
-"){
+ for _,line:=range strings.Split(snapshot,string(rune(10))){
   if strings.Contains(line,needle+"]") || strings.Contains(line,needle+" ") || strings.HasSuffix(strings.TrimSpace(line),needle){
    return line,nil
   }
