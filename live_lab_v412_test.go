@@ -3,6 +3,8 @@ package main
 import (
  "context"
  "encoding/json"
+ "os/exec"
+ "regexp"
  "os"
  "path/filepath"
  "strings"
@@ -81,4 +83,15 @@ func TestLiveHostTelemetryNotModelWakeProof(t *testing.T){
  if len(entries)!=1||entries[0].Status!="host_rejected"{t.Fatalf("not recorded: %+v",entries)}
  if err:=b.report("evt-999999","auto","host_resolved");err==nil{t.Fatal("accepted fabricated ID")}
  if !strings.Contains(report["note"].(string),"does not mean a new model turn"){t.Fatal("should not claim model woke up")}
+}
+
+func TestLiveWidgetJavaScriptSyntaxWithNode(t *testing.T){
+ node,err:=exec.LookPath("node")
+ if err!=nil{t.Skip("Node unavailable on host")}
+ matches:=regexp.MustCompile("(?s)<script>(.*?)</script>").FindStringSubmatch(liveWidgetHTML)
+ if len(matches)!=2{t.Fatal("embedded widget script missing")}
+ path:=filepath.Join(t.TempDir(),"live-widget.js")
+ if err:=os.WriteFile(path,[]byte(matches[1]),0600);err!=nil{t.Fatal(err)}
+ cmd:=exec.Command(node,"--check",path)
+ if out,err:=cmd.CombinedOutput();err!=nil{t.Fatalf("invalid widget JS: %v %s",err,out)}
 }
