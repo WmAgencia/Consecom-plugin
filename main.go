@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -32,7 +33,8 @@ func rpcResult(id json.RawMessage, result any) map[string]any {
 func rpcError(id json.RawMessage, code int, msg string) map[string]any {
 	return map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": msg}}
 }
-func (a *App) handleRPC(body []byte) (any, bool) {
+func (a *App) handleRPC(body []byte) (any,bool){return a.handleRPCContext(context.Background(),body)}
+func (a *App) handleRPCContext(ctx context.Context,body []byte) (any, bool) {
 	var q rpcReq
 	if e := json.Unmarshal(body, &q); e != nil {
 		return rpcError(nil, -32700, "JSON invalido"), true
@@ -49,11 +51,22 @@ func (a *App) handleRPC(body []byte) (any, bool) {
         if json.Unmarshal(q.Params,&hello)==nil && hello.ClientInfo.Name!=""{
             a.contextObserveMCPClient(hello.ClientInfo.Name)
         }
-		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": consecomVersion}}), true
+		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false},"resources":map[string]any{}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": consecomVersion}}), true
 	case "ping":
 		return rpcResult(q.ID, map[string]any{}), true
+    case "resources/list":
+        return rpcResult(q.ID,map[string]any{"resources":[]any{map[string]any{"uri":liveResourceURI,"name":"Consecom Live LAB","mimeType":"text/html;profile=mcp-app"}}}),true
+    case "resources/read":
+        var p struct{URI string `json:"uri"`}
+        if err:=json.Unmarshal(q.Params,&p);err!=nil||p.URI!=liveResourceURI{return rpcError(q.ID,-32602,"recurso nao encontrado"),true}
+        return rpcResult(q.ID,map[string]any{"contents":[]any{map[string]any{
+            "uri":liveResourceURI,"mimeType":"text/html;profile=mcp-app",
+            "text":liveWidgetHTML,
+            "_meta":map[string]any{"ui":map[string]any{"prefersBorder":true}},
+        }}}),true
 	case "tools/list":
-		return rpcResult(q.ID, map[string]any{"tools": tools()}), true
+        list:=append(tools(),liveToolSpecs()...)
+		return rpcResult(q.ID, map[string]any{"tools":list}), true
 	case "tools/call":
 		var p struct {
 			Name      string          `json:"name"`
@@ -62,6 +75,13 @@ func (a *App) handleRPC(body []byte) (any, bool) {
 		if e := json.Unmarshal(q.Params, &p); e != nil {
 			return rpcError(q.ID, -32602, "Parametros invalidos"), true
 		}
+        if isLiveTool(p.Name){
+            out,err:=a.liveCall(ctx,p.Name,p.Arguments)
+            if err!=nil{return rpcResult(q.ID,map[string]any{
+              "isError":true,"content":[]map[string]string{{"type":"text","text":err.Error()}},
+            }),true}
+            return rpcResult(q.ID,out),true
+        }
 		result, e := a.dispatch(p.Name, p.Arguments)
 		if e != nil {
 			return rpcResult(q.ID, map[string]any{"isError": true, "content": []map[string]string{{"type": "text", "text": e.Error()}}}), true
@@ -107,7 +127,7 @@ func (a *App) mcpHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "pedido muito grande", 413)
 		return
 	}
-	res, ok := a.handleRPC(b)
+	res, ok := a.handleRPCContext(r.Context(),b)
 	if !ok {
 		w.WriteHeader(202)
 		return
