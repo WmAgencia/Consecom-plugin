@@ -226,48 +226,339 @@ function closeModal(){document.getElementById('modalBack').style.display='none'}
 function openModal(which){let root=document.getElementById('modalContent');root.replaceChildren();if(which==='connection'){connectionModal(root);}else if(which==='browser'){browserModal(root);}else if(which==='updates'){updatesModal(root).catch(e=>toast(e.message,true));}else if(which==='folders'){root.append(dom('h2','Pastas autorizadas'),dom('p','Adicione apenas pastas de projetos. Acesso de escrita é opcional; no modo máximo o acesso ampliado continua bloqueando caminhos protegidos.'));for(let r of state.roots){let line=dom('div',undefined,'rootline'),info=dom('div');info.append(dom('b',r.name),dom('small',r.path));let btn=dom('button',r.writable?'Desativar escrita':'Habilitar escrita');btn.onclick=async()=>{try{await api('roots/writable',{id:r.id,writable:!r.writable});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};let del=dom('button','Remover');del.onclick=async()=>{if(!confirm('Revogar pasta?'))return;try{await api('roots/delete',{id:r.id});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};line.append(info,btn,del);root.append(line)}let nm=dom('input');nm.placeholder='Nome (ex: Projeto Prospector)';let path=dom('input');path.placeholder='C:\\Projetos ou D:\\Prospector';let add=dom('button','Adicionar pasta','primary');add.onclick=async()=>{try{await api('roots/add',{name:nm.value,path:path.value});toast('Pasta autorizada para leitura');await refresh();openModal('folders')}catch(e){toast(e.message,true)}};root.append(nm,path,add)}document.getElementById('modalBack').style.display='grid'}
 if(location.hash==='#agentes')page('lab');else if(location.hash==='#contexto')page('context');else page('panel');refresh();setInterval(refresh,7000);
 
-let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0},contextDrag=null;
-let contextSelectedNote=null;
-function svgElement(tag,attrs){let n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(let k in attrs)n.setAttribute(k,attrs[k]);return n}
-function contextReset(){contextScale=1;contextOffset={x:0,y:0};drawContext()}
-function contextZoom(k){contextScale=Math.max(.5,Math.min(3,contextScale*k));drawContext()}
-function drawContext(){
- let svg=document.getElementById('contextSVG');svg.replaceChildren();let sources=contextData.sources||[],notes=contextData.notes||[];
- document.getElementById('contextEmpty').classList.toggle('hidden',Boolean(contextData.vault_selected)||sources.length>0||notes.length>0);
- mark('contextCounters',sources.length+' fontes • '+notes.length+' ideias'+(contextData.vault_selected?' • 1 cofre':''));
- let layout={};let count=sources.length;
- if(contextData.vault_selected){layout['vault-obsidian']={x:450,y:305,color:'#ba91ff',size:42,vault:true,label:'Obsidian'};}
- sources.forEach((src,i)=>{let angle=(i/Math.max(1,count))*Math.PI*2-Math.PI/2;layout[src.id]={x:450+Math.cos(angle)*190,y:290+Math.sin(angle)*175,color:'#4dc7ff',size:30,source:src}});
- let perSource={};notes.forEach(n=>{(perSource[n.source_id]||(perSource[n.source_id]=[])).push(n)});
- notes.forEach(n=>{let group=perSource[n.source_id],idx=group.indexOf(n),base=layout[n.source_id]||{x:450,y:305};let angle=(idx/Math.max(1,group.length))*Math.PI*2+idx*.13;let radius=75+18*Math.floor(idx/6);layout[n.id]={x:base.x+Math.cos(angle)*radius,y:base.y+Math.sin(angle)*radius,color:'#3ee0af',size:12,note:n}});
- let g=svgElement('g',{transform:'translate('+contextOffset.x+' '+contextOffset.y+') scale('+contextScale+')'});svg.append(g);
- if(contextData.vault_selected){for(let s of sources){let t=layout[s.id];if(t)g.append(svgElement('line',{x1:450,y1:305,x2:t.x,y2:t.y,class:'context-edge'}))}}
- notes.forEach(n=>{let a=layout[n.source_id],b=layout[n.id];if(a&&b)g.append(svgElement('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:'context-edge'}));
- (n.links||[]).forEach(id=>{let t=layout[id];if(t)g.append(svgElement('line',{x1:b.x,y1:b.y,x2:t.x,y2:t.y,stroke:'#c098ff','stroke-width':'1.5','stroke-dasharray':'4 4',opacity:'.8'}))});
- });
- Object.entries(layout).forEach(([id,p])=>{let node=svgElement('g',{class:'context-node',tabindex:'0',role:'button','aria-label':p.vault?'Obsidian '+contextData.vault_name:(p.source?p.source.label:p.note.title)});
- node.append(svgElement('circle',{cx:p.x,cy:p.y,r:p.size,fill:p.color,opacity:'.9'}));
- let t=svgElement('text',{x:p.x,y:p.y+p.size+17});t.textContent=(p.vault?('Obsidian · '+contextData.vault_name):(p.source?p.source.label:p.note.title)).slice(0,28);node.append(t);
- node.addEventListener('click',()=>showContextNode(p));node.addEventListener('keydown',e=>{if(e.key==='Enter')showContextNode(p)});
- g.append(node)});
+let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0};
+let contextSelectedNote=null,contextDrag=null,contextHoverID=null,contextSelectedID=null;
+let contextGraphNodes=new Map(),contextGraphEdges=[],contextGraphParts=new Map(),contextGraphLines=[];
+let contextGraphWorld=null,contextGraphAnimation=0,contextGraphFrames=0;
+let contextRepulsion=96,contextLinkDistance=128;
+const contextCanvas=document.getElementById('contextCanvas'),contextSVG=document.getElementById('contextSVG');
+function svgElement(tag,attrs){const el=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const k in attrs)el.setAttribute(k,attrs[k]);return el}
+function contextGraphNormalize(name){return String(name||'').toLowerCase().replace(/[\s_.-]+/g,'')}
+function contextGraphAppID(name){
+ const s=contextGraphNormalize(name);
+ if(s.includes('claude')||s.includes('cloudcode'))return 'claude-code';
+ if(s.includes('opencode'))return 'opencode';
+ if(s.includes('codex'))return 'codex';
+ if(s.includes('chatgpt')||s.includes('openai'))return 'chatgpt';
+ if(s.includes('cursor'))return 'cursor';
+ if(s.includes('obsidian'))return 'obsidian';
+ return '';
 }
-function showContextNode(p){
- contextSelectedNote=p.note||null;
- document.getElementById('contextOpenObsidian').disabled=!contextSelectedNote||!contextData.vault_selected;
- let name=p.vault?'Obsidian — '+contextData.vault_name:(p.source?p.source.label:p.note.title);
- mark('contextDetailTitle',name);
- if(p.vault){mark('contextDetailBody','Cofre selecionado e sincronizado em Consecom/Contexto. Esta bolinha representa o cofre, mesmo sem notas ou agentes registrados.')}
- else if(p.source){let count=(contextData.notes||[]).filter(x=>x.source_id===p.source.id).length;mark('contextDetailBody','Fonte MCP • '+p.source.origin+'\n'+count+' nota(s) vinculada(s).\n\nEsta fonte foi declarada pelo cliente; o nome não comprova a identidade do programa.')}
- else{
- mark('contextDetailBody','Nota Markdown • '+new Date(p.note.created).toLocaleString('pt-BR')+'\n'+(p.note.links||[]).length+' relação(ões). Carregando...');
- api('contexto/note/read',{id:p.note.id}).then(r=>mark('contextDetailBody',r.result.content||'')).catch(e=>mark('contextDetailBody',e.message));
+function contextGraphBuild(){
+ const previous=contextGraphNodes;
+ const nodes=new Map(),edges=[];
+ function add(id,label,type,ref,color){
+  if(nodes.size>=260)return;
+  const old=previous.get(id),seq=nodes.size;
+  const angle=seq*2.399963229728653;
+  const radius=75+48*Math.sqrt(seq);
+  nodes.set(id,{id,label,type,ref,color,
+   x:old?old.x:600+Math.cos(angle)*radius,
+   y:old?old.y:350+Math.sin(angle)*radius,
+   vx:old?old.vx:0,vy:old?old.vy:0,pinned:old?old.pinned:false});
+ }
+ if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#b69bfa');
+ const items=window.contextIntegrationItems||[];
+ for(const app of items){
+  if(app.id==='obsidian'||!(app.ready||app.configured||app.observed||app.detected))continue;
+  add('app:'+app.id,app.label,'app',app,'#69cbd1');
+ }
+ const sources=contextData.sources||[];
+ for(const source of sources){
+  const id='folder:'+source.id;
+  add(id,source.label,'folder',source,'#a9b9ee');
+  const appID=contextGraphAppID(source.label);
+  const app='app:'+appID;
+  if(nodes.has(app))edges.push({a:app,b:id,type:'category'});
+  else if(nodes.has('vault'))edges.push({a:'vault',b:id,type:'category'});
+ }
+ const notes=(contextData.notes||[]).slice(0,190);
+ for(const note of notes){
+  const id='note:'+note.id;
+  add(id,note.title,'note',note,'#75e2ba');
+  if(nodes.has('folder:'+note.source_id))edges.push({a:'folder:'+note.source_id,b:id,type:'category'});
+ }
+ for(const note of notes){
+  for(const linkID of note.links||[]){
+   if(nodes.has('note:'+note.id)&&nodes.has('note:'+linkID))
+    edges.push({a:'note:'+note.id,b:'note:'+linkID,type:'link'});
+  }
+ }
+ if(nodes.has('vault')){
+  for(const app of items){
+   if(app.id==='obsidian'||!app.ready||!nodes.has('app:'+app.id))continue;
+   // These dotted relationships describe local MCP availability, not imported chat history.
+   edges.push({a:'vault',b:'app:'+app.id,type:'transport'});
+  }
+ }
+ contextGraphNodes=nodes;contextGraphEdges=edges;
+}
+function contextGraphTransform(){
+ if(contextGraphWorld)contextGraphWorld.setAttribute('transform','translate('+contextOffset.x+' '+contextOffset.y+') scale('+contextScale+')');
+ contextCanvas.style.backgroundPosition=(contextOffset.x*contextSVG.clientWidth/1200)+'px '+(contextOffset.y*contextSVG.clientHeight/720)+'px';
+}
+function contextGraphUpdateGeometry(){
+ for(let i=0;i<contextGraphEdges.length;i++){
+  const edge=contextGraphEdges[i],line=contextGraphLines[i],a=contextGraphNodes.get(edge.a),b=contextGraphNodes.get(edge.b);
+  if(!line||!a||!b)continue;
+  line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
+ }
+ for(const [id,el] of contextGraphParts){
+  const node=contextGraphNodes.get(id);if(node)el.setAttribute('transform','translate('+node.x+' '+node.y+')');
  }
 }
-const contextCanvas=document.getElementById('contextCanvas');
-contextCanvas.addEventListener('wheel',e=>{if(activePage!=='context')return;e.preventDefault();contextZoom(e.deltaY<0?1.12:.9)},{passive:false});
-contextCanvas.addEventListener('pointerdown',e=>{if(e.target.closest('.context-node'))return;contextDrag={x:e.clientX,y:e.clientY,offsetX:contextOffset.x,offsetY:contextOffset.y};contextCanvas.setPointerCapture(e.pointerId)});
-contextCanvas.addEventListener('pointermove',e=>{if(!contextDrag)return;let b=contextCanvas.getBoundingClientRect();contextOffset.x=contextDrag.offsetX+(e.clientX-contextDrag.x)*900/b.width;contextOffset.y=contextDrag.offsetY+(e.clientY-contextDrag.y)*610/b.height;drawContext()});
-contextCanvas.addEventListener('pointerup',()=>contextDrag=null);
+function contextGraphTick(){
+ contextGraphAnimation=0;
+ if(activePage!=='context'||contextGraphFrames>260||contextGraphNodes.size===0)return;
+ contextGraphFrames++;
+ const nodes=[...contextGraphNodes.values()];
+ // Force-directed layout: repulsion, springs, gentle gravity and velocity damping.
+ for(let i=0;i<nodes.length;i++){
+  for(let j=i+1;j<nodes.length;j++){
+   const a=nodes[i],b=nodes[j];
+   let dx=a.x-b.x,dy=a.y-b.y;
+   let d2=Math.max(160,dx*dx+dy*dy);
+   const force=contextRepulsion*30/d2;
+   const fx=dx*force/Math.sqrt(d2),fy=dy*force/Math.sqrt(d2);
+   if(!a.pinned){a.vx+=fx;a.vy+=fy}
+   if(!b.pinned){b.vx-=fx;b.vy-=fy}
+  }
+ }
+ for(const edge of contextGraphEdges){
+  const a=contextGraphNodes.get(edge.a),b=contextGraphNodes.get(edge.b);if(!a||!b)continue;
+  const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
+  const target=contextLinkDistance*(edge.type==='transport'?1.6:edge.type==='link'?.85:1);
+  const strength=(dist-target)*.013;
+  const fx=dx/dist*strength,fy=dy/dist*strength;
+  if(!a.pinned){a.vx+=fx;a.vy+=fy}
+  if(!b.pinned){b.vx-=fx;b.vy-=fy}
+ }
+ for(const n of nodes){
+  if(n.pinned){n.vx=0;n.vy=0;continue}
+  n.vx+=(600-n.x)*.0008;n.vy+=(350-n.y)*.0008;
+  n.vx*=.84;n.vy*=.84;
+  n.x+=Math.max(-8,Math.min(8,n.vx));
+  n.y+=Math.max(-8,Math.min(8,n.vy));
+ }
+ contextGraphUpdateGeometry();
+ if(contextGraphFrames<260)contextGraphAnimation=requestAnimationFrame(contextGraphTick);
+}
+function contextGraphResume(){
+ contextGraphFrames=0;
+ if(!contextGraphAnimation)contextGraphAnimation=requestAnimationFrame(contextGraphTick);
+}
+function contextGraphHighlight(){
+ const term=(document.getElementById('contextGraphSearch')?.value||'').toLowerCase().trim();
+ const neighborhood=new Set();
+ if(contextHoverID){
+  neighborhood.add(contextHoverID);
+  for(const edge of contextGraphEdges){if(edge.a===contextHoverID)neighborhood.add(edge.b);if(edge.b===contextHoverID)neighborhood.add(edge.a)}
+ }
+ const matched=new Set();
+ if(term)for(const n of contextGraphNodes.values())if(n.label.toLowerCase().includes(term))matched.add(n.id);
+ for(const [id,el] of contextGraphParts){
+  const n=contextGraphNodes.get(id);
+  const searchDim=term&& !matched.has(id) ? .12:1;
+  const hoverDim=contextHoverID && !neighborhood.has(id) ? .17:1;
+  el.style.opacity=String(Math.min(searchDim,hoverDim));
+  el.style.pointerEvents=searchDim===.12?'none':'auto';
+ }
+ for(let i=0;i<contextGraphEdges.length;i++){
+  const edge=contextGraphEdges[i],line=contextGraphLines[i];
+  const connected=contextHoverID&&(edge.a===contextHoverID||edge.b===contextHoverID);
+  const searchDim=term && !matched.has(edge.a)&&!matched.has(edge.b);
+  line.style.opacity=String(searchDim?.06:contextHoverID?(connected?.85:.06):edge.type==='transport'?.26:.39);
+  line.setAttribute('stroke-width',connected?2.3:1.3);
+ }
+}
+function contextFilterGraph(){contextGraphHighlight()}
+function drawContext(){
+ contextGraphBuild();
+ contextGraphParts=new Map();contextGraphLines=[];
+ contextSVG.replaceChildren();
+ const world=svgElement('g',{});contextSVG.append(world);contextGraphWorld=world;
+ const lines=svgElement('g',{});world.append(lines);
+ for(const edge of contextGraphEdges){
+  const line=svgElement('line',{class:'context-edge',stroke:edge.type==='link'?'#ae9be9':'#658595'});
+  if(edge.type==='transport')line.setAttribute('stroke-dasharray','4 7');
+  lines.append(line);contextGraphLines.push(line);
+ }
+ const points=svgElement('g',{});world.append(points);
+ for(const n of contextGraphNodes.values()){
+  const cls='context-node '+n.type;
+  const el=svgElement('g',{class:cls,tabindex:'0',role:'button','aria-label':n.label,'data-node':n.id});
+  const size=n.type==='vault'?27:n.type==='app'?19:n.type==='folder'?15:7;
+  const circle=svgElement('circle',{cx:0,cy:0,r:size,fill:n.color});
+  const title=svgElement('title',{});title.textContent=n.label;
+  circle.append(title);el.append(circle);
+  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,42);
+  el.append(label);
+  el.addEventListener('pointerenter',()=>{contextHoverID=n.id;contextGraphHighlight()});
+  el.addEventListener('pointerleave',()=>{contextHoverID=null;contextGraphHighlight()});
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showContextNode(n)}});
+  points.append(el);contextGraphParts.set(n.id,el);
+ }
+ contextGraphTransform();contextGraphUpdateGeometry();contextGraphHighlight();contextGraphResume();
+ document.getElementById('contextEmpty').classList.toggle('hidden',contextGraphNodes.size>0);
+ mark('contextCounters',contextGraphNodes.size+' nós · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas registradas');
+}
+function contextSettingsToggle(){document.getElementById('contextGraphSettings').classList.toggle('hidden')}
+function contextForceChanged(){
+ contextRepulsion=Number(document.getElementById('contextRepel').value);
+ contextLinkDistance=Number(document.getElementById('contextDistance').value);
+ for(const n of contextGraphNodes.values())n.pinned=false;
+ contextGraphResume();
+}
+function contextZoom(multiplier,px=600,py=360){
+ const old=contextScale;
+ contextScale=Math.max(.25,Math.min(5,old*multiplier));
+ contextOffset.x=px-(px-contextOffset.x)*contextScale/old;
+ contextOffset.y=py-(py-contextOffset.y)*contextScale/old;
+ contextGraphTransform();
+}
+function contextReset(){
+ contextScale=1;contextOffset={x:0,y:0};
+ let i=0;
+ for(const n of contextGraphNodes.values()){
+  const angle=i++*2.399963229728653;
+  n.x=600+Math.cos(angle)*(75+50*Math.sqrt(i));
+  n.y=350+Math.sin(angle)*(75+50*Math.sqrt(i));
+  n.vx=0;n.vy=0;n.pinned=false;
+ }
+ contextGraphTransform();contextGraphUpdateGeometry();contextGraphResume();
+}
+function contextSVGPoint(e){
+ const p=contextSVG.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
+ const matrix=contextSVG.getScreenCTM();
+ if(!matrix)return{x:600,y:360};
+ return p.matrixTransform(matrix.inverse());
+}
+function contextWorldPoint(e){
+ const p=contextSVGPoint(e);
+ return{x:(p.x-contextOffset.x)/contextScale,y:(p.y-contextOffset.y)/contextScale};
+}
+function contextGraphFocus(n){
+ contextScale=1.2;contextOffset={x:600-n.x*contextScale,y:360-n.y*contextScale};
+ contextGraphTransform();
+}
+function contextClosePreview(){document.getElementById('contextGraphPreview').classList.add('hidden');contextSelectedID=null}
+function showContextNode(p){
+ const preview=document.getElementById('contextGraphPreview');
+ const title=document.getElementById('contextDetailTitle');
+ const body=document.getElementById('contextDetailBody');
+ const open=document.getElementById('contextOpenObsidian');
+ const node=p.id?p:{type:p.note?'note':p.source?'folder':p.vault?'vault':'app',ref:p.note||p.source||null,label:p.vault?'Obsidian':p.source?.label||p.note?.title||'Integração',id:''};
+ contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:null;
+ title.textContent=(node.type==='folder'?'📁 ':node.type==='note'?'◇ ':'◉ ')+node.label;
+ open.classList.toggle('hidden',!contextSelectedNote||!contextData.vault_selected);
+ preview.classList.remove('hidden');
+ if(node.type==='vault'){
+  body.textContent='Cofre Obsidian conectado: '+contextData.vault_name+'\n\nO Consecom utiliza a pasta Consecom/Contexto e não importa automaticamente outras notas do cofre.';
+ }else if(node.type==='app'){
+  body.textContent=(node.ref?.detail||'Aplicativo registrado')+'\n\nConexão de ferramenta e importação de histórico são operações distintas.';
+ }else if(node.type==='folder'){
+  const count=(contextData.notes||[]).filter(n=>n.source_id===node.ref?.id).length;
+  body.textContent='Pasta lógica: '+node.label+'\nFonte: '+(node.ref?.origin||'MCP')+'\n'+count+' nota(s) cadastrada(s).\n\nAs fontes aparecem agrupadas por origem. Um nó não comprova que todos os históricos do aplicativo já foram importados.';
+ }else if(node.type==='note'){
+  body.textContent='Lendo nota registrada...';
+  const id=node.ref?.id;
+  if(id)api('contexto/note/read',{id}).then(r=>{
+   if(contextSelectedNote?.id===id)body.textContent=(r.result.content||'Nota sem conteúdo').slice(0,24000);
+  }).catch(e=>{if(contextSelectedNote?.id===id)body.textContent=e.message});
+ }
+}
+function contextGraphContextMenu(e,node){
+ e.preventDefault();contextCloseMenu();
+ const menu=document.getElementById('contextGraphMenu');
+ const rect=contextCanvas.getBoundingClientRect();
+ menu.style.left=Math.max(5,Math.min(rect.width-200,e.clientX-rect.left))+'px';
+ menu.style.top=Math.max(5,Math.min(rect.height-150,e.clientY-rect.top))+'px';
+ function item(label,action){const b=dom('button',label);b.onclick=()=>{contextCloseMenu();action()};menu.append(b)}
+ item('Ver detalhes',()=>showContextNode(node));
+ item('Centralizar nó',()=>contextGraphFocus(node));
+ if(node.type==='note'&&contextData.vault_selected)item('Abrir no Obsidian',()=>{showContextNode(node);openContextInObsidian()});
+ if(node.type==='folder'&&contextData.vault_selected)item('Nova ideia',()=>openContextNote());
+ menu.classList.remove('hidden');
+}
+function contextCloseMenu(){document.getElementById('contextGraphMenu').classList.add('hidden');document.getElementById('contextGraphMenu').replaceChildren()}
+contextSVG.addEventListener('pointerdown',e=>{
+ if(e.button!==0)return;
+ contextCloseMenu();
+ const el=e.target.closest('.context-node');
+ const point=contextSVGPoint(e);
+ if(el){
+  const node=contextGraphNodes.get(el.getAttribute('data-node'));
+  if(!node)return;
+  contextDrag={type:'node',id:node.id,start:point,last:point,moved:false};
+  node.pinned=true;el.classList.add('dragging');
+ }else{
+  contextDrag={type:'pan',start:point,oldX:contextOffset.x,oldY:contextOffset.y,moved:false};
+  contextSVG.classList.add('dragging');
+ }
+ e.preventDefault();contextSVG.setPointerCapture(e.pointerId);
+});
+contextSVG.addEventListener('pointermove',e=>{
+ if(!contextDrag)return;
+ const point=contextSVGPoint(e),drag=contextDrag;
+ const diff=Math.hypot(point.x-drag.start.x,point.y-drag.start.y);
+ if(diff>5)drag.moved=true;
+ if(drag.type==='node'){
+  const n=contextGraphNodes.get(drag.id);
+  if(n){
+   n.x+=(point.x-drag.last.x)/contextScale;
+   n.y+=(point.y-drag.last.y)/contextScale;
+   n.vx=0;n.vy=0;
+   contextGraphUpdateGeometry();contextGraphResume();
+  }
+ }else{
+  contextOffset={x:drag.oldX+point.x-drag.start.x,y:drag.oldY+point.y-drag.start.y};
+  contextGraphTransform();
+ }
+ drag.last=point;
+});
+function contextFinishDrag(e){
+ if(!contextDrag)return;
+ const drag=contextDrag;contextDrag=null;
+ contextSVG.classList.remove('dragging');
+ if(drag.type==='node'){
+  const n=contextGraphNodes.get(drag.id);
+  contextGraphParts.get(drag.id)?.classList.remove('dragging');
+  if(n&&!drag.moved)showContextNode(n);
+  else contextGraphResume();
+ }else if(!drag.moved)contextClosePreview();
+ try{if(contextSVG.hasPointerCapture(e.pointerId))contextSVG.releasePointerCapture(e.pointerId)}catch{}
+}
+contextSVG.addEventListener('pointerup',contextFinishDrag);
+contextSVG.addEventListener('pointercancel',contextFinishDrag);
+contextSVG.addEventListener('contextmenu',e=>{
+ const el=e.target.closest('.context-node');
+ if(el){const n=contextGraphNodes.get(el.getAttribute('data-node'));if(n){contextGraphContextMenu(e,n);return}}
+ e.preventDefault();contextCloseMenu();
+});
+contextSVG.addEventListener('wheel',e=>{
+ if(activePage!=='context')return;
+ e.preventDefault();
+ const p=contextSVGPoint(e);
+ contextZoom(e.deltaY<0?1.12:1/1.12,p.x,p.y);
+},{passive:false});
+contextSVG.setAttribute('tabindex','0');
+contextSVG.addEventListener('keydown',e=>{
+ if(e.target!==contextSVG)return;
+ if(e.key==='+'||e.key==='='){e.preventDefault();contextZoom(1.2)}
+ if(e.key==='-'){e.preventDefault();contextZoom(1/1.2)}
+ const speed=e.shiftKey?60:24;
+ if(e.key==='ArrowUp'){contextOffset.y+=speed;e.preventDefault()}
+ if(e.key==='ArrowDown'){contextOffset.y-=speed;e.preventDefault()}
+ if(e.key==='ArrowLeft'){contextOffset.x+=speed;e.preventDefault()}
+ if(e.key==='ArrowRight'){contextOffset.x-=speed;e.preventDefault()}
+ contextGraphTransform();
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&activePage==='context'){
+  contextCloseMenu();contextClosePreview();document.getElementById('contextGraphSettings').classList.add('hidden');
+ }
+});
+
 async function reloadContext(){
  return (async()=>{
  try{
@@ -291,7 +582,7 @@ async function reloadContext(){
  btn.textContent=contextData.vault_selected?'✓ Reconectar':'Conectar automaticamente';
  btn.disabled=!r.obsidian_detected;
  drawContext();
- renderContextExplorer();
+ drawContext();
  await loadContextIntegrations();
  }catch(e){toast('Contexto: '+e.message,true)}
  })()
@@ -334,7 +625,7 @@ async function loadContextIntegrations(){
    }
    box.append(card);
   }
-  renderContextExplorer();
+  drawContext();
  }catch(e){box.replaceChildren(dom('p','Falha ao consultar integrações: '+e.message));}
  })()
 }
