@@ -103,6 +103,9 @@ func tools() []Tool {
 		{"video_inspecionar","Ler metadados de video local do projeto com FFprobe, sem alterar o arquivo.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo .mp4 .mov .mkv .webm")},"root_id","caminho"),readonly},
 		{"video_extrair_frame","Extrair frame JPEG reduzido (ate 512 KiB) com FFmpeg em timestamp especifico, sem gravar arquivos no projeto.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo"),"segundos":map[string]any{"type":"number","minimum":0,"maximum":36000}},"root_id","caminho","segundos"),readonly},
 		{"video_diagnosticar","Analisar ate 20 segundos iniciais de video com FFmpeg procurando quadros pretos e congelamentos candidatos.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo")},"root_id","caminho"),readonly},
+		{"video_render_iniciar","Iniciar exportacao MP4 assincrona em projeto com escrita autorizada (story, landscape, square; ate 180 segundos).",schema(map[string]any{"root_id":str("ID do projeto"),"entrada":str("Video local relativo"),"preset":map[string]any{"type":"string","enum":[]string{"story","landscape","square"}},"inicio":map[string]any{"type":"integer","minimum":0,"maximum":36000},"duracao":map[string]any{"type":"integer","minimum":1,"maximum":180}},"root_id","entrada","preset","inicio","duracao"),mutating},
+		{"video_render_status","Consultar status, log, nome da saida e tamanho de exportacao MP4 iniciada pelo Consecom.",schema(map[string]any{"id":str("ID do render")},"id"),readonly},
+		{"video_render_cancelar","Interromper exportacao MP4 em andamento e remover arquivo temporario.",schema(map[string]any{"id":str("ID do render")},"id"),mutating},
 		{"fluxo_iniciar","Executar fluxo de 1 a 6 comandos de desenvolvimento permitidos de forma sequencial, verificando cada saida, com cancelamento.",schema(map[string]any{"root_id":str("ID do projeto"),"etapas":map[string]any{"type":"array","minItems":1,"maxItems":6,"items":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}}},"root_id","etapas"),mutating},
 		{"fluxo_status","Verificar etapa, logs recentes e sucesso/falha de um fluxo em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),readonly},
 		{"fluxo_cancelar","Interromper fluxo e sua etapa atualmente em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),mutating},
@@ -185,6 +188,21 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
 		return a.videoDiagnose(id,path)
+	case "video_render_iniciar":
+		var spec RenderSpec
+		var e error
+		spec.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		spec.Input,e=argStr(args,"entrada");if e!=nil{return nil,e}
+		spec.Preset,e=argStr(args,"preset");if e!=nil{return nil,e}
+		if e=json.Unmarshal(args["inicio"],&spec.Start);e!=nil{return nil,e}
+		if e=json.Unmarshal(args["duracao"],&spec.Duration);e!=nil{return nil,e}
+		return a.videoRenderRequest(spec)
+	case "video_render_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.videoRenderStatus(id)
+	case "video_render_cancelar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.videoRenderCancel(id)
 	case "fluxo_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		var steps []string
@@ -539,6 +557,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.codeEditApproved(p)
 	case "coderestore":
 		return a.codeRestoreApproved(p)
+	case "videorender":
+		return a.videoRenderApproved(p)
 	case "winchild":
 		return a.approveDesktopElement(p)
 	case "workflow":
