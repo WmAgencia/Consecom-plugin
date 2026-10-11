@@ -38,6 +38,7 @@ type App struct {
 	startedAt      time.Time
 	agents         map[string]*Agent
 	browserControl BrowserControl
+	devJobs DevJobManager
 }
 type ProcessTarget struct {
 	PID  int    `json:"pid"`
