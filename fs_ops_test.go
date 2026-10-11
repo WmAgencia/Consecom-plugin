@@ -194,7 +194,7 @@ func TestFileOpsThroughJSONRPC(t *testing.T) {
 	if info, err := os.Stat(folder); err != nil || !info.IsDir() {
 		t.Fatal("rpc did not create folder", err)
 	}
-	if len(tools()) != 69 {
+	if len(tools()) != 71 {
 		t.Fatalf("unexpected tool count %d", len(tools()))
 	}
 }
