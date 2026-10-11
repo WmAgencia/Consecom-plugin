@@ -132,3 +132,18 @@ Passos para desenvolver um site:
 6. Use o conector Railway para projetos, servicos, ambientes, variaveis e deployments quando precisar de backend/worker.
 
 O plugin **nao** promete acesso irrestrito a contas desconhecidas, nao le nem salva tokens dos provedores, nao executa \`git push\` ou um deploy sem fluxo explicitamente solicitado e nao substitui permissoes dos conectores, escopos de equipe, autenticacao e UAC. Para uma execucao local independente do ChatGPT, autentique as CLIs em seu proprio PC pelos fluxos oficiais dos provedores; a verificacao de instalacao nao significa sessao autenticada.
+
+
+### 4.4.0 PREVIEW — Servidor de desenvolvimento local persistente
+
+Cinco ferramentas MCP em preview: `dev_preview_iniciar`, `dev_preview_status`, `dev_preview_listar`, `dev_preview_parar`, `dev_preview_verificar`.
+
+- O usuario cadastra uma **pasta especifica** de projeto Node com permissao de escrita no painel Consecom e instala dependencias (`node_modules`). O software nao instala pacotes automaticamente.
+- So aceita projetos com `package.json`, script `dev` e dependencia identificada como Next.js, Vite ou Astro. O script pode executar codigo arbitrario do **proprio projeto**; somente pastas cadastradas executam codigo.
+- Inicia `npm run dev` com flags fixas (framework conhecido) e host `127.0.0.1` / porta selecionada entre 1024 e 65535. Nenhum comando ou caminho arbitrario entra no shell.
+- Limite de **2 servidores simultaneos**. Sessao de no maximo **60 minutos**; encerra processo e descendentes pelo Windows. Os previews sao **efemeros**: nao sobrevivem a reinicio do Consecom.
+- Nos modos com aprovacao local, o primeiro start exige aprovacao no painel; em modo `maximum`, executa sem novo prompt local.
+- `dev_preview_verificar` faz apenas um GET HTTP no URL loopback criado pela propria sessao, com 4 s de timeout, limite de 1 MiB, sem seguir redirects, retornando status/Content-Type/presenca de title, viewport, description e h1. **Nao e um teste Lighthouse ou Playwright.**
+- Nao le arquivos `.env`, nem devolve logs brutos de processo ao ChatGPT (scripts do projeto podem emitir segredos). Para inspecionar erros, use testes de build/lint aprovados e logs locais sob seu controle.
+
+**Atenção:** esta etapa e um prototipo de ferramenta para desenvolvimento pessoal, nao uma promessa de servidores publicos em producao. Testar no Windows real antes de colocar em planos pagos; verificar politica de encerramento de subprocessos em casos de falha/reinicio do serviço.
