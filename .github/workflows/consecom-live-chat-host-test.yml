@@ -7,7 +7,6 @@ on:
       - .github/workflows/consecom-live-chat-host-test.yml
 permissions:
   contents: read
-  issues: write
 concurrency:
   group: consecom-live-chat-host-test
   cancel-in-progress: true
@@ -25,8 +24,7 @@ jobs:
           go test ./experiments/consecom-live-poc
           go build -o /tmp/consecom-live-chat-lab ./experiments/consecom-live-poc
       - name: Start temporary HTTPS tunnel and synthetic MCP
-        env:
-          GH_TOKEN: ${{ github.token }}
+        id: start-host
         shell: bash
         run: |
           set -euo pipefail
@@ -75,18 +73,17 @@ jobs:
             echo "This endpoint is read-only for MCP and **does not access your computer**."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "MCP_TEST_URL=$origin/mcp"
-          # Make the ephemeral URL visible while the job is RUNNING.
-          # Use REST, not gh issue comment GraphQL, which may be restricted for Actions tokens.
-          body="$(jq -n --arg address "$origin/mcp" --arg run "$GITHUB_RUN_ID" '{body:("Consecom Live temporary MCP (synthetic only, valid approximately 18 minutes): " + $address + "\\nRun ID: " + $run) }')"
-          code="$(curl -sS -o /tmp/comment-response.json -w "%{http_code}" -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            -H "Content-Type: application/json" -d "$body" \
-            https://api.github.com/repos/WmAgencia/Consecom-plugin/issues/20/comments || true)"
-          if [[ "$code" == "201" ]]; then
-            echo "Temporary MCP URL announced on pull request #20"
-          else
-            echo "::warning::Could not post dynamic URL (HTTP $code). Keeping the safe lab alive."
-          fi
+          # Publish a short-lived artifact whose NAME contains only the public
+          # synthetic MCP hostname, never tokens or private machine metadata.
+          echo "hostname=${origin#https://}" >> "$GITHUB_OUTPUT"
+          echo "$origin/mcp" > "$RUNNER_TEMP/consecom-live-url.txt"
+      - name: Publish live test URL as artifact metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: consecom-live-${{ steps.start-host.outputs.hostname }}
+          path: ${{ runner.temp }}/consecom-live-url.txt
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Keep test online and emit synthetic events
         shell: bash
