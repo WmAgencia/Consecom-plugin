@@ -22,29 +22,26 @@ type IntegrationStatus struct {
  Supported bool `json:"supported"`
  Configured bool `json:"configured"`
  Observed bool `json:"observed"`
+ WorkspaceHint string `json:"workspace_hint,omitempty"`
+ Ready bool `json:"ready"`
  Detail string `json:"detail"`
 }
 
 var integrationNames=[]struct{ID,Label,Executable string}{
+ {"chatgpt","ChatGPT Chat",""},
  {"obsidian","Obsidian",""},
  {"claude-code","Claude Code","claude"},
- {"codex","Codex CLI","codex"},
  {"opencode","OpenCode","opencode"},
+ {"codex","Codex CLI","codex"},
  {"cursor","Cursor",""},
- {"chatgpt","ChatGPT Chat",""},
 }
 
 func contextExecutable(command string)(string,bool){
- if command==""{return "",false}
- p,e:=exec.LookPath(command)
- if e!=nil{return "",false}
- // Never send shell scripts, .cmd or .bat into a privileged installer.
- if runtime.GOOS=="windows" && !strings.EqualFold(filepath.Ext(p),".exe"){return "",false}
- return p,true
+ cli,ok:=contextCLI(command);return cli.Binary,ok
 }
-
 func (a *App) contextIntegrations()(any,error){
  vaults,err:=obsidianVaults();if err!=nil{return nil,err}
+ clues:=contextWorkspaceClues()
  var apps []InstalledWindowsApp
  if runtime.GOOS=="windows" {
   if v,e:=windowsAppsSearch("");e==nil{
@@ -56,7 +53,11 @@ func (a *App) contextIntegrations()(any,error){
  configured:=make(map[string]bool,len(a.cfg.ContextConnections))
  for k,v:=range a.cfg.ContextConnections{configured[k]=v}
  sources:=append([]ContextSource(nil),a.cfg.ContextSources...)
+ lastMCP:=a.lastMCP
  a.mu.Unlock()
+ tunnel:=tunnelStatus(a)
+ tunnelReady:=tunnel["status"]=="pronto"
+ mcpRecent:=!lastMCP.IsZero()&&time.Since(lastMCP)<3*time.Minute
  out:=make([]IntegrationStatus,0,len(integrationNames))
  for _,item:=range integrationNames{
   _,cli:=contextExecutable(item.Executable)
@@ -64,36 +65,53 @@ func (a *App) contextIntegrations()(any,error){
   for _,app:=range apps{
    n:=strings.ToLower(app.Name+" "+app.AppID)
    switch item.ID{
-   case "obsidian":desktop=desktop||strings.Contains(n,"obsidian")
+   case "obsidian": desktop=desktop||strings.Contains(n,"obsidian")
    case "claude-code":desktop=desktop||strings.Contains(n,"claude code")
    case "codex":desktop=desktop||strings.Contains(n,"codex")
    case "opencode":desktop=desktop||strings.Contains(n,"opencode")||strings.Contains(n,"open code")
    case "cursor":desktop=desktop||strings.Contains(n,"cursor")
-   case "chatgpt":desktop=desktop||strings.Contains(n,"chatgpt")||strings.Contains(n,"openai.codex")
+   case "chatgpt":desktop=desktop||strings.Contains(n,"chatgpt")
    }
   }
-  detected:=cli||desktop
-  if item.ID=="obsidian"{detected=detected||len(vaults)>0}
-  supported:=item.ID=="obsidian"||item.ID=="claude-code"&&cli||item.ID=="codex"&&cli||item.ID=="opencode"&&cli
+  hint:=clues[item.ID]
+  detected:=cli||desktop||hint!=""
+  supported:=cli&&(item.ID=="claude-code"||item.ID=="codex")
+  if item.ID=="opencode"{supported=detected}
+  if item.ID=="obsidian"{detected=detected||len(vaults)>0;supported=len(vaults)>0}
   cfg:=configured[item.ID]
   if item.ID=="obsidian"{cfg=selected!=""}
   observed:=false
-  for _,s:=range sources{
-   if strings.HasPrefix(s.Origin,"mcp-clientInfo")&&contextOrigin(s.Label)==contextOrigin(item.Label){observed=true;break}
+  for _,source:=range sources{
+   if strings.HasPrefix(source.Origin,"mcp-clientInfo")&&contextOrigin(source.Label)==contextOrigin(item.Label){observed=true;break}
   }
-  detail:="Nao detectado neste Windows"
-  if detected{detail="Detectado; ainda nao configurado"}
-  if detected&&!supported{detail="Aplicativo detectado; conector CLI nao encontrado ou nao disponivel"}
-  if cfg{detail="Configurado; reinicie o cliente e confirme a conexao MCP"}
-  if observed{detail="Cliente MCP observado; identidade nao autenticada"}
-  if item.ID=="obsidian"&&cfg{detail="Cofre selecionado; sincronizacao Consecom/Contexto ativa"}
-  if item.ID=="obsidian"&&len(vaults)>1&&!cfg{detail="Mais de um cofre; escolha qual conectar no seletor acima"}
-  if item.ID=="chatgpt"{supported=false;if detected{detail="ChatGPT Chat se conecta pelo aplicativo MCP do ChatGPT, nao por instalacao local"}}
-  out=append(out,IntegrationStatus{ID:item.ID,Label:item.Label,Detected:detected,Supported:supported,Configured:cfg,Observed:observed,Detail:detail})
+  ready:=false
+  detail:="Aplicativo nao detectado"
+  if detected { detail="Aplicativo detectado; pronto para configurar" }
+  if hint!=""&&!cli{detail="Pasta de projeto identificada; CLI ainda nao localizada"}
+  if cfg{detail="Configuracao MCP salva; reinicie o cliente para validar"}
+  if observed{detail="Cliente MCP observado anteriormente; identidade nao autenticada"}
+  if item.ID=="obsidian"{
+   if len(vaults)>0{detail="Cofre detectado; clique para conectar automaticamente"}
+   if cfg{detail="Cofre sincronizado com Consecom/Contexto";ready=true}
+  }
+  if item.ID=="opencode"&&cfg{detail="Configuracao local MCP criada; reinicie o OpenCode"}
+  if item.ID=="chatgpt"{
+   detected=tunnel["installed"]==true||tunnel["configured"]==true||tunnelReady
+   cfg=tunnelReady
+   observed=mcpRecent
+   supported=false
+   ready=tunnelReady
+   switch {
+   case mcpRecent: detail="ChatGPT utilizou o MCP recentemente; tunel pronto"
+   case tunnelReady: detail="Tunel pronto; aguardando a primeira chamada do ChatGPT"
+   case tunnel["configured"]==true:detail="Tunel configurado; aguardando conexao"
+   default: detail="Conecte o tunel na Central de Controle"
+   }
+  }
+  out=append(out,IntegrationStatus{ID:item.ID,Label:item.Label,Detected:detected,Supported:supported,Configured:cfg,Observed:observed,Ready:ready,WorkspaceHint:hint,Detail:detail})
  }
- return map[string]any{"integrations":out},nil
-}
-func (a *App) contextMarkConfigured(id string)error{
+ return map[string]any{"integrations":out,"search":"PATH, locais oficiais, menu Iniciar e nomes de pastas em C:/D: com busca limitada"},nil
+}func (a *App) contextMarkConfigured(id string)error{
  a.mu.Lock();defer a.mu.Unlock()
  if a.cfg.ContextConnections==nil{a.cfg.ContextConnections=map[string]bool{}}
  before:=a.cfg.ContextConnections[id]
@@ -101,61 +119,57 @@ func (a *App) contextMarkConfigured(id string)error{
  if err:=a.saveLocked();err!=nil{if !before{delete(a.cfg.ContextConnections,id)};return err}
  return nil
 }
-func contextRunMCP(executable string, args ...string)error{
- ctx,cancel:=context.WithTimeout(context.Background(),12*time.Second)
+func contextRunMCPWithCLI(cli contextCLIInfo,args ...string)error{
+ ctx,cancel:=context.WithTimeout(context.Background(),20*time.Second)
  defer cancel()
- cmd:=exec.CommandContext(ctx,executable,args...)
- // Calls the official CLIs with a fixed, bounded argv. No shell or token values.
+ argv:=append(append([]string{},cli.Prefix...),args...)
+ cmd:=exec.CommandContext(ctx,cli.Binary,argv...)
  cmd.Env=os.Environ()
  output,err:=cmd.CombinedOutput()
- if err!=nil {
-  if ctx.Err()!=nil{return errors.New("o cliente nao respondeu dentro de 12 segundos")}
-  return fmt.Errorf("o cliente MCP recusou a configuracao: %s",clip(strings.TrimSpace(string(output)),240))
+ if err!=nil{
+  if ctx.Err()!=nil{return errors.New("CLI expirou em 20 segundos; nenhuma confirmacao de conexao foi registrada")}
+  return fmt.Errorf("CLI nao configurou o MCP: %s",clip(strings.TrimSpace(string(output)),320))
  }
  return nil
-}
-func (a *App) contextConnectIntegration(id string)(any,error){
- switch id{
+}func (a *App) contextConnectIntegration(id string)(any,error){
+ switch id {
  case "obsidian":
-  vaults,err:=obsidianVaults();if err!=nil{return nil,err}
-  if len(vaults)!=1{return nil,errors.New("selecione o cofre desejado na lista Obsidian (exige exatamente um para conexao automatica)")}
-  return a.contextVaultSelect(vaults[0]["id"].(string))
+  return a.contextVaultAuto()
  case "claude-code","codex","opencode":
   var command string
   switch id{case "claude-code":command="claude";case "codex":command="codex";case "opencode":command="opencode"}
-  cli,ok:=contextExecutable(command)
-  if !ok{return nil,errors.New("CLI compatível nao detectada. Instale a CLI oficial e tente novamente")}
   binary,err:=os.Executable();if err!=nil{return nil,err}
   binary,err=filepath.Abs(binary);if err!=nil{return nil,err}
   if runtime.GOOS=="windows" && !strings.EqualFold(filepath.Base(binary),"MCP-PC.exe"){
-   return nil,errors.New("a conexao so funciona na instalacao Windows oficial MCP-PC.exe")
+   return nil,errors.New("use a instalacao oficial MCP-PC.exe para configurar ferramentas locais")
   }
   if id=="opencode"{
    home,err:=os.UserHomeDir();if err!=nil{return nil,err}
    target:=filepath.Join(home,".config","opencode","opencode.json")
    if err=contextConfigureOpenCode(target,binary);err!=nil{return nil,err}
   }else{
-   // Fail instead of changing an existing client entry named consecom.
-   if err:=contextRunMCP(cli,"mcp","get","consecom");err==nil{
-    return nil,errors.New("ja existe uma entrada consecom nesta CLI; confira sua configuracao antes de substituir")
-   }
-   args:=[]string{"mcp","add","consecom"}
+   cli,ok:=contextCLI(command)
+   if !ok{return nil,errors.New("CLI nao encontrada nos locais padrao; pastas de projetos nao executam comandos MCP")}
+   args:=[]string{"mcp","add"}
    if id=="claude-code"{args=append(args,"--scope","user")}
-   args=append(args,"--",binary,"--stdio")
-   if err:=contextRunMCP(cli,args...);err!=nil{return nil,err}
-   if err:=contextRunMCP(cli,"mcp","get","consecom");err!=nil{
-    return nil,errors.New("cliente nao confirmou a configuracao MCP; verifique manualmente")
-   }
+   args=append(args,"consecom","--",binary,"--stdio")
+   if err:=contextRunMCPWithCLI(cli,args...);err!=nil{return nil,err}
   }
   if err:=a.contextMarkConfigured(id);err!=nil{return nil,err}
   label:=map[string]string{"claude-code":"Claude Code","codex":"Codex","opencode":"OpenCode"}[id]
   source,e:=a.contextRegisterSource(label,"setup-cli-unverified")
   if e!=nil{return nil,e}
-  return map[string]any{"status":"configured","id":id,"verification":"configuracao registrada, handshake MCP ainda nao observado","source":source},nil
- default:return nil,errors.New("integracao nao suporta conexao automatica nesta versao")
+  return map[string]any{"status":"configured","id":id,"verification":"Configurado. Valide o cliente no proximo handshake MCP.","source":source},nil
+ default:return nil,errors.New("integracao nao oferece conexao automatica")
  }
 }
-
+func (a *App) contextIndexIntegration(id string)(any,error){
+ names:=map[string]string{"claude-code":"Claude Code","opencode":"OpenCode","codex":"Codex","cursor":"Cursor"}
+ label,ok:=names[id];if !ok{return nil,errors.New("tipo de fonte desconhecido")}
+ clues:=contextWorkspaceClues()
+ if clues[id]==""{return nil,errors.New("nenhum repositorio identificado para essa fonte")}
+ return a.contextRegisterSource(label,"local-directory-unverified")
+}
 // OpenCode's global JSON format is merged instead of replacing other entries.
 // Existing non-JSON or conflicting Consecom entries remain untouched.
 func contextConfigureOpenCode(path,binary string)error{
