@@ -54,8 +54,8 @@ func TestBrowserToolListValid(t *testing.T) {
 		t.Fatal("missing")
 	}
 	b, _ := json.Marshal(r)
-	if strings.Count(string(b), `"name":"browser_`) != 17 {
-		t.Fatalf("wrong browser tools %s", b)
+	if strings.Count(string(b), `"name":"browser_`) != 21 {
+		t.Fatalf("expected 21 browser tools; listing has %d",strings.Count(string(b), `"name":"browser_`))
 	}
 }
 
