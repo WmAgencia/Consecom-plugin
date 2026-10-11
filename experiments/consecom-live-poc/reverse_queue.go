@@ -151,14 +151,12 @@ func (b *broker) journalState() map[string]any {
  }
 }
 func parseWaitArgs(raw json.RawMessage)(uint64,time.Duration,error){
- var payload struct{
-  AfterSequence int64
-  WaitMS int64
- }
+ var payload map[string]int64
  if len(raw)==0 {raw=[]byte("{}")}
  if err:=json.Unmarshal(raw,&payload);err!=nil{return 0,0,errors.New("JSON de espera invalido")}
- if payload.AfterSequence<0||payload.WaitMS<0||payload.WaitMS>12000{
+ after,wait:=payload["after_sequence"],payload["wait_ms"]
+ if after<0||wait<0||wait>12000{
   return 0,0,errors.New("after_sequence >=0 e wait_ms entre 0 e 12000")
  }
- return uint64(payload.AfterSequence),time.Duration(payload.WaitMS)*time.Millisecond,nil
+ return uint64(after),time.Duration(wait)*time.Millisecond,nil
 }
