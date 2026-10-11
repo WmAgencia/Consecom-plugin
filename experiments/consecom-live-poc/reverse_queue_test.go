@@ -8,6 +8,7 @@ import (
  "net/http/httptest"
  "os"
  "path/filepath"
+ "runtime"
  "strings"
  "sync"
  "testing"
@@ -28,7 +29,7 @@ func TestReverseJournalSurvivesRestart(t *testing.T){
  if second.Sequence!=2||second.ID!="evt-000002"{t.Fatalf("second %+v",second)}
  if first.ID==second.ID{t.Fatal("replayed ID after restart")}
  info,err:=os.Stat(path);if err!=nil{t.Fatal(err)}
- if info.Mode().Perm()&0077!=0{t.Fatal("journal should be private to current user")}
+ if runtime.GOOS!="windows"&&info.Mode().Perm()&0077!=0{t.Fatal("journal should be private to current user")}
 }
 func TestReverseWaitDetectsNewEventWithNoLostWakeup(t *testing.T){
  b:=newBroker()
