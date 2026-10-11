@@ -85,7 +85,17 @@ func (a *App) statusExtra() map[string]any {
 		mode = "always"
 	}
 	connected := !a.lastMCP.IsZero() && time.Since(a.lastMCP) < 5*time.Minute
-	return map[string]any{"mode": mode, "mcp_recent": connected, "mcp_last": a.lastMCP.Format(time.RFC3339), "version": consecomVersion, "started_at": a.startedAt.Format(time.RFC3339)}
+	uptimeSeconds := int64(time.Since(a.startedAt).Seconds())
+	if uptimeSeconds < 0 { uptimeSeconds = 0 }
+	return map[string]any{
+		"mode": mode,
+		"mcp_recent": connected,
+		"mcp_last": a.lastMCP.Format(time.RFC3339),
+		"version": consecomVersion,
+		"started_at": a.startedAt.Format(time.RFC3339),
+		"uptime_seconds": uptimeSeconds,
+		"active_tools": len(tools()),
+	}
 }
 
 // Even maximum approval does not expose credential stores, system files,
