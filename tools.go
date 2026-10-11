@@ -75,6 +75,10 @@ func tools() []Tool {
 		{"dev_job_iniciar","Iniciar comando de desenvolvimento de uma lista permitida, com limite de tempo, log e aprovacao local para builds/scripts.",schema(map[string]any{"root_id":str("Pasta de projeto autorizada"),"acao":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}},"root_id","acao"),mutating},
 		{"dev_job_status","Consultar status e log parcial de uma execucao por ID.",schema(map[string]any{"id":str("ID de execucao")},"id"),readonly},
 		{"dev_job_cancelar","Solicitar cancelamento de uma execucao em andamento.",schema(map[string]any{"id":str("ID de execucao")},"id"),mutating},
+		{"git_patch_validar","Verificar patch de texto em projeto autorizado sem modificar arquivos.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff unificado no formato Git, max 30KB")},"root_id","patch"),readonly},
+		{"git_patch_aplicar","Solicitar aprovacao local para aplicar patch de texto e executar testes opcionais; rollback se testes falharem.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff Git"),"teste":map[string]any{"type":"string","enum":[]string{"none","go_test","npm_test","npm_lint"}}},"root_id","patch"),mutating},
+		{"git_patch_reverter","Solicitar aprovacao para reverter patch realizado pelo Consecom, sem sobrescrever outras edicoes.",schema(map[string]any{"id":str("ID do patch salvo")},"id"),mutating},
+		{"git_branch_criar","Solicitar aprovacao para criar branch Git dentro de projeto autorizado.",schema(map[string]any{"root_id":str("ID do projeto"),"nome":str("Nome da branch")},"root_id","nome"),mutating},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -107,6 +111,18 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 	case "dev_job_cancelar":
 		id,e:=argStr(args,"id");if e!=nil{return nil,e}
 		return a.devJobCancel(id)
+	case "git_patch_validar","git_patch_aplicar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		patch,e:=argStr(args,"patch");if e!=nil{return nil,e}
+		if name=="git_patch_validar"{return a.gitPatchCheck(id,patch)}
+		return a.gitPatchRequest(id,patch,optionalString(args,"teste"))
+	case "git_patch_reverter":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.gitPatchRollbackRequest(id)
+	case "git_branch_criar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		n,e:=argStr(args,"nome");if e!=nil{return nil,e}
+		return a.gitBranchRequest(id,n)
 	case "dev_execucao":
 		rootID, e := argStr(args, "root_id")
 		if e != nil {
@@ -384,6 +400,12 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveDeveloper(p)
 	case "devjob":
 		return a.approveDevJob(p)
+	case "gitpatch":
+		return a.gitPatchApproved(p)
+	case "gitrollback":
+		return a.gitPatchRollbackApproved(p)
+	case "gitbranch":
+		return a.gitBranchApproved(p)
 	case "close":
 		errs := []string{}
 		for _, t := range p.Processes {
