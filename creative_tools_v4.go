@@ -46,11 +46,16 @@ func creativeTools()(any,error){
    }
   }
   if item.Available{
-   version,verifyErr:=verifyCreativeProgram(item.Name,item.Executable)
-   if verifyErr!=nil{
+   // WindowsApps python.exe can be a Store-launching alias, not an interpreter.
+   // Avoid starting it just to test installation.
+   alias:=item.Name=="Python"&&strings.Contains(strings.ToLower(filepath.ToSlash(item.Executable)),"/microsoft/windowsapps/")
+   if alias{
     item.Available=false
     item.Executable=""
-   }else{item.Version=version}
+   }else{
+    version,verifyErr:=verifyCreativeProgram(item.Name,item.Executable)
+    if verifyErr!=nil{item.Available=false;item.Executable=""}else{item.Version=version}
+   }
   }
   list=append(list,item)
  }
