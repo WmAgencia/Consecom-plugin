@@ -202,6 +202,8 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 		respond(w, "tunel desconectado e credencial removida", tunnelDisconnect(a))
 	case "/api/contexto":
         v,e:=a.contextStatus();respond(w,v,e)
+    case "/api/contexto/indice":
+        v,e:=a.contextIndex();respond(w,v,e)
     case "/api/contexto/integracoes":
         v,e:=a.contextIntegrations();respond(w,v,e)
     case "/api/contexto/integracoes/conectar":
