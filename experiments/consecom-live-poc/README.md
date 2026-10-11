@@ -27,12 +27,8 @@ Restrições do protótipo:
 $env:CONSECOM_LIVE_TOKEN = ([guid]::NewGuid().ToString("N") + [guid]::NewGuid().ToString("N"))
 $env:CONSECOM_LIVE_LISTEN = "127.0.0.1:8793"
 $env:CONSECOM_LIVE_PUBLIC_ORIGIN = "http://127.0.0.1:8793"
-./Consecom-Live-POC.exe
-```
-
-Em outra janela:
-
-```powershell
+Start-Process -FilePath "./Consecom-Live-POC.exe"
+Start-Sleep -Seconds 2
 Invoke-RestMethod -Uri "http://127.0.0.1:8793/demo/emit" -Method Post -Headers @{Authorization = "Bearer $env:CONSECOM_LIVE_TOKEN"}
 ```
 
