@@ -38,7 +38,6 @@ type App struct {
 	startedAt      time.Time
 	agents         map[string]*Agent
 	browserControl BrowserControl
-	inbox          *TaskInbox
 }
 type ProcessTarget struct {
 	PID  int    `json:"pid"`
@@ -89,7 +88,6 @@ func NewApp(path string) (*App, error) {
 	} else {
 		return nil, e
 	}
-	a.inbox = newTaskInbox(filepath.Dir(path))
 	return a, nil
 }
 func (a *App) saveLocked() error {
