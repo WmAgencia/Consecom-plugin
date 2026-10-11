@@ -60,6 +60,8 @@ func (a *App) browserQATool(name,viewport string)(any,error){
  s:=a.browserControl.session
  if s==nil{return nil,errors.New("abra primeiro uma aba controlada pelo Consecom")}
  switch name{
+ case "browser_qa_instrumentar","browser_qa_erros":
+  return browserQARecorder(s,name)
  case "browser_qa_auditar":
   return cdpEvaluate(s,browserQAAuditScript)
  case "browser_qa_responsivo":
