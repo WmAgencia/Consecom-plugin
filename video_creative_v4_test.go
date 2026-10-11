@@ -48,5 +48,5 @@ func TestV4NewVideoToolsAreRegistered(t *testing.T){
  expected:=map[string]bool{"video_extrair_frame":false,"video_diagnosticar":false}
  for _,v:=range tools(){if _,ok:=expected[v.Name];ok {expected[v.Name]=true}}
  for n,exists:=range expected{if !exists{t.Errorf("MCP tool not registered: %s",n)}}
- if len(tools())!=96{t.Fatalf("expected 96 tools; got %d",len(tools()))}
+ if len(tools())!=98{t.Fatalf("expected 98 tools; got %d",len(tools()))}
 }
