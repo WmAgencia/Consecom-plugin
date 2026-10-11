@@ -96,3 +96,5 @@ Quando o usuário habilita **Aprovação máxima** no próprio painel (confirma�
 - `atualizacao_solicitar` permanece protegida por uma permissao **independente**, `remote_approved`, escolhida no proprio painel. Nao se habilita atualizacao remota de executaveis apenas por usar o modo maximo.
 - Selecionar um navegador/perfil ainda e uma preferencia explicita e separada; nao se assume o perfil pessoal automaticamente.
 - Se o ChatGPT bloquear uma acao no cliente antes que ela chegue ao MCP, a alteracao do Consecom nao tem como remover esse bloqueio.
+
+- Ao ativar o modo maximo, pedidos antigos de aprovacao local de outros modos sao **cancelados, jamais executados automaticamente**. Reenvie a acao que deseja executar. Um pedido de atualizacao remota permanece pendente por usar uma permissao separada.
