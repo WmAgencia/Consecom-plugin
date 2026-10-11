@@ -2,7 +2,7 @@
 
 Integração controlada entre o ChatGPT e um computador Windows por meio de um servidor MCP local e túnel privado.
 
-**Versão atual do projeto:** 4.0.0
+**Versão publicada:** 4.0.0 · **Próxima versão em desenvolvimento:** 4.1.0
 
 ## Recursos
 
@@ -66,3 +66,21 @@ Quando o usuário habilita **Aprovação máxima** no próprio painel (confirma�
 - **Fluxos de tarefas**: executar ate 6 comandos de desenvolvimento predefinidos sequencialmente, interrompendo se um falhar. Acompanhar etapa, logs e cancelar. O fluxo nao e um agente IA independente de conversas.
 
 **Seguranca:** ferramentas limitadas a pastas autorizadas e listas de comandos, sem shell arbitrario, captura de credenciais ou elevacao silenciosa. Acesso administrativo futuro deve usar UAC, registros e escopos especificos.
+
+
+## V4.1.0 em desenvolvimento (nao publicada)
+- `codigo_previsualizar_diff`: previa textual de uma substituicao exata, com verificacao de versao SHA-256 sem tocar no arquivo.
+- `codigo_restaurar_backup`: restauro de snapshot criado pelas edicoes desta fase, bloqueado se houve modificacao externa, com backup preventivo para recuperacao.
+- `fluxo_historico`: ultimos 20 fluxos com progresso e status; snapshots locais gravados durante cada etapa e recuperados apos reinicio. Fluxos interrompidos **nao** sao retomados automaticamente.
+- Catalogo em desenvolvimento: **78 ferramentas MCP**, sujeito a validacao no runner Windows e testes reais no PC.
+- A release v4.0.0 permanece a versao distribuida ate merge, validacao e nova publicacao.
+
+
+### Adicoes desta iteracao (pendentes de validacao no PC)
+- `video_extrair_frame`: JPEG limitado por frame via FFmpeg em timestamp exato dentro de pasta autorizada.
+- `video_diagnosticar`: heuristicas de preto/congelamento com ate 20 s de amostra (resultados podem ser cenas intencionais).
+- `video_render_iniciar`, `video_render_status`, `video_render_cancelar`: exportacao assincrona MP4 H.264/AAC com tres proporcoes, tempo maximo 180 s por tarefa e saida em nova pasta `consecom-renders` (precisa escrita autorizada).
+- `codigo_formatar_go`: formatacao gofmt com SHA256 esperado, permissao de escrita, backup recuperavel e aprovacao conforme modo local.
+- Deteccao criativa agora prova o executavel e versao antes de considerar instalado e ignora aliases de loja WindowsApps para Python.
+- Codigo de base UI Automation Windows adicionado sem registro MCP de novas acoes; **ainda nao entregue como recurso funcional**.
+- Testes Windows e artefato PREVIEW dependem do CI da branch; nenhuma nova release deve ser declarada sem o resultado final.

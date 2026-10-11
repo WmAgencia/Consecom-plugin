@@ -71,6 +71,7 @@ func (a *App) workflowStart(rootID string,steps []string)(any,error){
  job:=&WorkflowTask{ID:newID(),RootID:rootID,Steps:append([]string{},steps...),Status:"running",Started:time.Now(),Logs:[]string{"Fluxo iniciado"},cancel:cancel}
  a.workflows.jobs[job.ID]=job
  a.workflows.mu.Unlock()
+ a.workflowCheckpoint(job)
  go a.workflowRun(ctx,job)
  return map[string]any{"id":job.ID,"status":"running","steps":job.Steps,"note":"Cada etapa e validada; o fluxo interrompe ao primeiro erro"},nil
 }
@@ -80,10 +81,12 @@ func (a *App) workflowRun(ctx context.Context,job *WorkflowTask){
   if job.Status=="running"{job.Status="done"}
   job.Finished=time.Now();job.cancel=nil
   a.workflows.mu.Unlock()
+  a.workflowCheckpoint(job)
  }()
  for i,step:=range job.Steps{
   if ctx.Err()!=nil {a.workflowStop(job,"cancelled",ctx.Err().Error());return}
   a.workflows.mu.Lock();job.Current=i+1;job.Logs=append(job.Logs,fmt.Sprintf("%d/%d Iniciando %s",i+1,len(job.Steps),step));a.workflows.mu.Unlock()
+  a.workflowCheckpoint(job)
   result,e:=a.devJobStart(job.RootID,step,true)
   if e!=nil{a.workflowStop(job,"error",e.Error());return}
   data,ok:=result.(map[string]any);if !ok{a.workflowStop(job,"error","execucao retornou formato invalido");return}
@@ -105,19 +108,27 @@ func (a *App) workflowRun(ctx context.Context,job *WorkflowTask){
     job.Logs=append(job.Logs,fmt.Sprintf("%s: %s %s",step,result.Status,clip(result.Output,1200)))
     if len(job.Logs)>30{job.Logs=job.Logs[len(job.Logs)-30:]}
     a.workflows.mu.Unlock()
+    a.workflowCheckpoint(job)
     if result.Status!="done"{a.workflowStop(job,"error",fmt.Sprintf("%s falhou: %s",step,result.Error));return}
    }
   }
  }
 }
 func (a *App) workflowStop(job *WorkflowTask,status,detail string){
- a.workflows.mu.Lock();defer a.workflows.mu.Unlock()
+ a.workflows.mu.Lock()
  job.Status=status;job.Logs=append(job.Logs,clip(detail,900))
+ a.workflows.mu.Unlock()
+ a.workflowCheckpoint(job)
 }
 func (a *App) workflowStatus(id string)(any,error){
- a.workflows.mu.Lock();defer a.workflows.mu.Unlock()
- j:=a.workflows.jobs[id];if j==nil{return nil,errors.New("fluxo nao encontrado")}
+ a.workflows.mu.Lock()
+ j:=a.workflows.jobs[id]
+ if j==nil{
+  a.workflows.mu.Unlock()
+  return a.loadWorkflowSnapshot(id)
+ }
  copy:=*j;copy.Steps=append([]string{},j.Steps...);copy.Logs=append([]string{},j.Logs...);copy.cancel=nil
+ a.workflows.mu.Unlock()
  return copy,nil
 }
 func (a *App) workflowCancel(id string)(any,error){

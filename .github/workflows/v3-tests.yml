@@ -30,3 +30,23 @@ jobs:
           $env:TMP = $tmp
           go test ./...
           if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Gerar instalador PREVIEW sem release
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = '0'
+          go build -trimpath -ldflags='-s -w -H windowsgui' -o installer/payload/MCP-PC.exe .
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          New-Item -ItemType Directory -Path dist-preview -Force | Out-Null
+          go build -trimpath -ldflags='-s -w -H windowsgui' -o dist-preview/Consecom_Plugin_v4.1.0_PREVIEW.exe ./installer
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          (Get-FileHash dist-preview/Consecom_Plugin_v4.1.0_PREVIEW.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii dist-preview/SHA256.txt
+      - name: Disponibilizar artefato temporario para teste no PC
+        uses: actions/upload-artifact@v4
+        with:
+          name: consecom-4.1.0-preview-windows
+          path: |
+            dist-preview/Consecom_Plugin_v4.1.0_PREVIEW.exe
+            dist-preview/SHA256.txt
+          if-no-files-found: error
+          retention-days: 7

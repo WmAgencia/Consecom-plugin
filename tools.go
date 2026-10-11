@@ -95,13 +95,22 @@ func tools() []Tool {
 		{"codigo_buscar","Pesquisar texto em ate 250 arquivos de codigo de um projeto autorizado, retornando trecho e numero da linha.",schema(map[string]any{"root_id":str("ID do projeto"),"termo":str("Termo de busca")}, "root_id","termo"),readonly},
 		{"codigo_ler_trecho","Ler ate 160 linhas de codigo com numero de linha e SHA256 para edicao segura.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"inicio":map[string]any{"type":"integer","minimum":1},"quantidade":map[string]any{"type":"integer","minimum":1,"maximum":160}},"root_id","caminho","inicio","quantidade"),readonly},
 		{"codigo_substituir_trecho","Substituir trecho unico no codigo com SHA256 de versao e backup, dentro de projeto com escrita permitida.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 retornado por codigo_ler_trecho"),"original":str("Texto exato a substituir"),"novo":str("Texto substituto")}, "root_id","caminho","sha256","original","novo"),mutating},
+		{"codigo_previsualizar_diff","Previsualizar diferencas antes de editar codigo; confirma SHA256 e unicidade sem gravar no disco.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 da leitura"),"original":str("Trecho original exato"),"novo":str("Trecho proposto")}, "root_id","caminho","sha256","original","novo"),readonly},
+		{"codigo_restaurar_backup","Restaurar um backup de codigo pelo ID registrado na edicao; exige checksum do arquivo atual e copia preventiva.",schema(map[string]any{"id":str("ID do backup retornado na edicao")},"id"),mutating},
+		{"codigo_formatar_go","Formatar arquivo Go de um projeto autorizado com gofmt, backup e verificacao de versao por SHA256.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo Go relativo"),"sha256":str("SHA256 original obtido na leitura")},"root_id","caminho","sha256"),mutating},
 		{"desktop_controles","Encontrar controles Win32 visiveis associados a uma janela, como botoes, menus e campos.",schema(map[string]any{"window":str("ID da janela")},"window"),readonly},
 		{"desktop_controle_clicar","Clicar no centro de um controle Win32 valido, na propria janela. Respeita modo de aprovacao local.",schema(map[string]any{"window":str("ID da janela"),"controle":str("ID do controle obtido em desktop_controles")},"window","controle"),mutating},
 		{"programas_criativos","Detectar disponibilidade de FFmpeg, FFprobe, Blender, ImageMagick, Python e Node sem executar tarefas.",schema(map[string]any{}),readonly},
 		{"video_inspecionar","Ler metadados de video local do projeto com FFprobe, sem alterar o arquivo.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo .mp4 .mov .mkv .webm")},"root_id","caminho"),readonly},
+		{"video_extrair_frame","Extrair frame JPEG reduzido (ate 512 KiB) com FFmpeg em timestamp especifico, sem gravar arquivos no projeto.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo"),"segundos":map[string]any{"type":"number","minimum":0,"maximum":36000}},"root_id","caminho","segundos"),readonly},
+		{"video_diagnosticar","Analisar ate 20 segundos iniciais de video com FFmpeg procurando quadros pretos e congelamentos candidatos.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo")},"root_id","caminho"),readonly},
+		{"video_render_iniciar","Iniciar exportacao MP4 assincrona em projeto com escrita autorizada (story, landscape, square; ate 180 segundos).",schema(map[string]any{"root_id":str("ID do projeto"),"entrada":str("Video local relativo"),"preset":map[string]any{"type":"string","enum":[]string{"story","landscape","square"}},"inicio":map[string]any{"type":"integer","minimum":0,"maximum":36000},"duracao":map[string]any{"type":"integer","minimum":1,"maximum":180}},"root_id","entrada","preset","inicio","duracao"),mutating},
+		{"video_render_status","Consultar status, log, nome da saida e tamanho de exportacao MP4 iniciada pelo Consecom.",schema(map[string]any{"id":str("ID do render")},"id"),readonly},
+		{"video_render_cancelar","Interromper exportacao MP4 em andamento e remover arquivo temporario.",schema(map[string]any{"id":str("ID do render")},"id"),mutating},
 		{"fluxo_iniciar","Executar fluxo de 1 a 6 comandos de desenvolvimento permitidos de forma sequencial, verificando cada saida, com cancelamento.",schema(map[string]any{"root_id":str("ID do projeto"),"etapas":map[string]any{"type":"array","minItems":1,"maxItems":6,"items":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}}},"root_id","etapas"),mutating},
 		{"fluxo_status","Verificar etapa, logs recentes e sucesso/falha de um fluxo em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),readonly},
 		{"fluxo_cancelar","Interromper fluxo e sua etapa atualmente em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),mutating},
+		{"fluxo_historico","Listar ate 20 fluxos recentes, inclusive execucoes anteriores a reinicializacao do Consecom, com estado real.",schema(map[string]any{}),readonly},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -124,6 +133,25 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		}
 	}
 	switch name {
+	case "codigo_previsualizar_diff":
+		req:=EditorEdit{}
+		var e error
+		req.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		req.Path,e=argStr(args,"caminho");if e!=nil{return nil,e}
+		req.ExpectedSHA,e=argStr(args,"sha256");if e!=nil{return nil,e}
+		req.Old,e=argStr(args,"original");if e!=nil{return nil,e}
+		req.New,e=argStr(args,"novo");if e!=nil{return nil,e}
+		return a.codeDiffPreview(req)
+	case "codigo_restaurar_backup":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.codeRestoreRequest(id)
+	case "codigo_formatar_go":
+		var spec FormatGoSpec
+		var e error
+		spec.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		spec.Path,e=argStr(args,"caminho");if e!=nil{return nil,e}
+		spec.ExpectedSHA,e=argStr(args,"sha256");if e!=nil{return nil,e}
+		return a.codeFormatGoRequest(spec)
 	case "codigo_buscar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		term,e:=argStr(args,"termo");if e!=nil{return nil,e}
@@ -158,6 +186,31 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
 		return a.inspectVideo(id,path)
+	case "video_extrair_frame":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		var secs float64
+		if e=json.Unmarshal(args["segundos"],&secs);e!=nil{return nil,e}
+		return a.videoFrame(id,path,secs)
+	case "video_diagnosticar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		return a.videoDiagnose(id,path)
+	case "video_render_iniciar":
+		var spec RenderSpec
+		var e error
+		spec.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		spec.Input,e=argStr(args,"entrada");if e!=nil{return nil,e}
+		spec.Preset,e=argStr(args,"preset");if e!=nil{return nil,e}
+		if e=json.Unmarshal(args["inicio"],&spec.Start);e!=nil{return nil,e}
+		if e=json.Unmarshal(args["duracao"],&spec.Duration);e!=nil{return nil,e}
+		return a.videoRenderRequest(spec)
+	case "video_render_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.videoRenderStatus(id)
+	case "video_render_cancelar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.videoRenderCancel(id)
 	case "fluxo_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		var steps []string
@@ -169,6 +222,8 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 	case "fluxo_cancelar":
 		id,e:=argStr(args,"id");if e!=nil{return nil,e}
 		return a.workflowCancel(id)
+	case "fluxo_historico":
+		return a.workflowListHistory()
 	case "dev_job_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
@@ -508,6 +563,12 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveDesktop(p)
 	case "codeedit":
 		return a.codeEditApproved(p)
+	case "coderestore":
+		return a.codeRestoreApproved(p)
+	case "codeformat":
+		return a.codeFormatGoApproved(p)
+	case "videorender":
+		return a.videoRenderApproved(p)
 	case "winchild":
 		return a.approveDesktopElement(p)
 	case "workflow":
