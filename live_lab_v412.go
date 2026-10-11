@@ -159,13 +159,15 @@ func (b *LiveLab) get(id string)(LiveEvent,bool){
  for _,ev:=range b.events{if ev.ID==id{return ev,true}}
  return LiveEvent{},false
 }
-func (b *LiveLab) report(id,mode,status,observedAt string)error{
+func (b *LiveLab) report(id,mode,status string,observations ...string)error{
  if !liveEventPattern.MatchString(id){return errors.New("invalid live event id")}
  if mode!="auto"&&mode!="manual"{return errors.New("invalid mode")}
  switch status {
  case "attempt","host_rejected","host_resolved","unavailable","pending":
  default:return errors.New("invalid host status")
  }
+ observedAt:=""
+ if len(observations)>0{observedAt=observations[0]}
  stamp,err:=liveObservedAt(observedAt)
  if err!=nil{return err}
  b.mu.Lock();defer b.mu.Unlock()
