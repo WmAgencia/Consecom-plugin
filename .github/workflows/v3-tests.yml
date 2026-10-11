@@ -29,7 +29,7 @@ jobs:
           New-Item -ItemType Directory -Path $tmp -Force | Out-Null
           $env:TEMP = $tmp
           $env:TMP = $tmp
-          go test ./...
+          go test -v ./...
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Gerar instalador PREVIEW sem release
