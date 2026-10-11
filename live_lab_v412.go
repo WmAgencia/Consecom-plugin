@@ -161,7 +161,7 @@ func (b *LiveLab) report(id,mode,status string)error{
  for i,ev:=range b.events {
   if ev.ID!=id {continue}
   found=true
-  if ev.Kind=="PANEL_MESSAGE" {
+  if ev.Kind=="PANEL_MESSAGE" && ev.Delivery=="claimed" {
    next:=ev
    switch status {
    case "host_resolved": next.Delivery="host_resolved"
