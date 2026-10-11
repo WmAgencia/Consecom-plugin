@@ -61,8 +61,7 @@ func runQualityGate(root Root)(string,error){
  result:=""
  for _,step:=range steps{
   part,err:=runApprovedPatchTest(root,step)
-  result+=step+": "+clip(part,600)+"
-"
+  result+=step+": "+clip(part,600)+`\n`
   if err!=nil{return clip(result,1800),err}
  }
  return clip(result,1800),nil
