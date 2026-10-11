@@ -79,6 +79,15 @@ func TestChatDashboardUIAndPrompt(t *testing.T){
  if !strings.Contains(liveWidgetHTML,"consecom_chat_responder"){t.Fatal("widget does not instruct model to publish reply")}
  if strings.Contains(liveWidgetHTML,"trycloudflare.com")||strings.Contains(liveWidgetHTML,"chat.openai.com"){t.Fatal("widget cannot require separate connection")}
 }
+func TestChatFastPathTelemetryAndMeasuredLatency(t *testing.T){
+ followup:=strings.Index(liveWidgetHTML,"const followUp=fn({prompt:prompt,scrollToBottom:false})")
+ telemetry:=strings.Index(liveWidgetHTML,"observe(ev,mode,\"attempt\")")
+ if followup<0||telemetry<0||followup>=telemetry{t.Fatal("Host message must be dispatched before telemetry RPC")}
+ if !strings.Contains(liveWidgetHTML,"retryMs=300*Math.pow(2,retry)"){t.Fatal("Missing fast transient claim retry")}
+ if !strings.Contains(liveWidgetHTML,"failures=Math.min(failures+1,5)"){t.Fatal("Missing bounded MCP reconnect backoff")}
+ if !strings.Contains(uiHTML,"Math.round((endTime-startTime)/1000)"){t.Fatal("Missing measured end-to-end response latency")}
+ if !strings.Contains(uiHTML,"refreshConsecomChat()},900)"){t.Fatal("Expected sub-second local chat updates")}
+}
 func TestChatResponseCannotBeAuthoredByDashboardAPIPost(t *testing.T){
  a,err:=NewApp(filepath.Join(t.TempDir(),"config.json"));if err!=nil{t.Fatal(err)}
  request:=httptest.NewRequest("POST","http://127.0.0.1:8765/api/live/chat",strings.NewReader("{}"))
