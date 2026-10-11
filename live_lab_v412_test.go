@@ -45,6 +45,9 @@ func TestLiveSingleMCPToolDiscoveryAndWidget(t *testing.T){
  if !strings.Contains(liveTestJSON(resources),liveResourceURI){t.Fatal("resource not available in current MCP")}
  widget:=liveTestRPC(t,a,"resources/read",map[string]any{"uri":liveResourceURI})
  if !strings.Contains(liveTestJSON(widget),"window.openai.callTool")||!strings.Contains(liveTestJSON(widget),"sendFollowUpMessage"){t.Fatal("widget must use bridge tools + follow up")}
+ legacy:=liveTestRPC(t,a,"resources/read",map[string]any{"uri":liveLegacyResourceURI})
+ if !strings.Contains(liveTestJSON(legacy),"consecom_live_assumir_mensagem"){t.Fatal("legacy outputTemplate must serve current message widget")}
+ if !strings.Contains(liveTestJSON(legacy),liveLegacyResourceURI){t.Fatal("legacy resource must preserve requested URI")}
  if strings.Contains(liveWidgetHTML,"trycloudflare.com")||strings.Contains(liveWidgetHTML,"chat.openai.com"){t.Fatal("widget must not rely on external tunnel or browser automation")}
 }
 func TestLiveQueueDurableAndSyntheticOnly(t *testing.T){

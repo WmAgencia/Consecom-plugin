@@ -55,12 +55,12 @@ func (a *App) handleRPCContext(ctx context.Context,body []byte) (any, bool) {
 	case "ping":
 		return rpcResult(q.ID, map[string]any{}), true
     case "resources/list":
-        return rpcResult(q.ID,map[string]any{"resources":[]any{map[string]any{"uri":liveResourceURI,"name":"Consecom Live LAB","mimeType":"text/html;profile=mcp-app"}}}),true
+        return rpcResult(q.ID,map[string]any{"resources":[]any{map[string]any{"uri":liveResourceURI,"name":"Consecom Live","mimeType":"text/html;profile=mcp-app"},map[string]any{"uri":liveLegacyResourceURI,"name":"Consecom Live (compatibilidade)","mimeType":"text/html;profile=mcp-app"}}}),true
     case "resources/read":
         var p struct{URI string `json:"uri"`}
-        if err:=json.Unmarshal(q.Params,&p);err!=nil||p.URI!=liveResourceURI{return rpcError(q.ID,-32602,"recurso nao encontrado"),true}
+        if err:=json.Unmarshal(q.Params,&p);err!=nil||(p.URI!=liveResourceURI&&p.URI!=liveLegacyResourceURI){return rpcError(q.ID,-32602,"recurso nao encontrado"),true}
         return rpcResult(q.ID,map[string]any{"contents":[]any{map[string]any{
-            "uri":liveResourceURI,"mimeType":"text/html;profile=mcp-app",
+            "uri":p.URI,"mimeType":"text/html;profile=mcp-app",
             "text":liveWidgetHTML,
             "_meta":map[string]any{"ui":map[string]any{"prefersBorder":true}},
         }}}),true
