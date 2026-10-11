@@ -65,7 +65,9 @@ func (a *App) handleRPCContext(ctx context.Context,body []byte) (any, bool) {
             "_meta":map[string]any{"ui":map[string]any{"prefersBorder":true}},
         }}}),true
 	case "tools/list":
-        list:=append(tools(),liveToolSpecs()...)
+        list:=make([]any,0,len(tools())+len(liveToolSpecs()))
+        for _,tool:=range tools(){list=append(list,tool)}
+        for _,tool:=range liveToolSpecs(){list=append(list,tool)}
 		return rpcResult(q.ID, map[string]any{"tools":list}), true
 	case "tools/call":
 		var p struct {
