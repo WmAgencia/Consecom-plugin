@@ -53,11 +53,14 @@ type LiveLab struct {
  running bool
  until time.Time
  lastPanelSent time.Time
+ replyPath string
+ replies []LiveChatReply
+ replySeq uint64
 }
 func newLiveLab(path string)(*LiveLab,error){
  b:=&LiveLab{journal:path,notify:make(chan struct{})}
  raw,err:=os.ReadFile(path)
- if errors.Is(err,os.ErrNotExist){return b,nil}
+ if errors.Is(err,os.ErrNotExist){if e:=b.loadChatReplies();e!=nil{return nil,e};return b,nil}
  if err!=nil{return nil,err}
  if len(raw)>131072{return nil,errors.New("live lab journal exceeds limit")}
  var j LiveJournal
@@ -68,6 +71,7 @@ func newLiveLab(path string)(*LiveLab,error){
   if i>0&&ev.Sequence<=j.Events[i-1].Sequence{return nil,errors.New("live lab sequence not monotonic")}
  }
  b.seq=j.Sequence;b.events=append([]LiveEvent(nil),j.Events...)
+ if e:=b.loadChatReplies();e!=nil{return nil,e}
  return b,nil
 }
 func (b *LiveLab) saveLocked(seq uint64,events []LiveEvent)error{
@@ -221,6 +225,13 @@ func liveToolSpecs()[]LiveTool{
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
   {Name:"consecom_live_assumir_mensagem",Description:"Reivindicar atomicamente uma mensagem manual do painel para impedir envio duplicado por widgets simultaneos.",InputSchema:schema(map[string]any{"id":str("ID de mensagem evt-000001")},"id"),Annotations:obs,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
+  {Name:"consecom_chat_responder",Description:"Publicar uma resposta real do ChatGPT no chat da Central de Controle do Consecom. Obrigatorio apos receber pergunta vinda do painel. Use tipo andamento para atualizacoes e tipo final para encerrar. Nao executa comandos; aceita apenas mensagens PANEL_MESSAGE ja entregues.",InputSchema:schema(map[string]any{
+   "id":str("ID evt-000001 da pergunta do painel."),
+   "texto":map[string]any{"type":"string","maxLength":6000,"description":"Resposta ao usuario a ser exibida na Central de Controle, texto puro, UTF-8 ate 6000 bytes."},
+   "tipo":map[string]any{"type":"string","enum":[]string{"andamento","final"}},
+   "chave":map[string]any{"type":"string","maxLength":80,"description":"Chave opcional para evitar duplicacao de chamadas, letras, numeros, hifen e underscore."},
+  },"id","texto","tipo"),Annotations:obs},
+  {Name:"consecom_chat_historico",Description:"Consultar perguntas do painel e respostas publicadas, na ordem, para manter uma conversa bidirecional dentro da Central de Controle.",InputSchema:schema(map[string]any{}),Annotations:readonly},
   {Name:"consecom_live_resultados",Description:"Consultar tentativas feitas pelo componente Live LAB e seu retorno sem dados privados.",InputSchema:schema(map[string]any{}),Annotations:readonly},
  }
  return base
@@ -276,10 +287,19 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
   status,err:=liveArgString(m,"status");if err!=nil{return nil,err}
   if err:=a.live.report(key,mode,status);err!=nil{return nil,err}
   v=map[string]any{"ok":true}
+ case "consecom_chat_responder":
+  key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
+  var txt,kind,dedupe string
+  if err=json.Unmarshal(m["texto"],&txt);err!=nil{return nil,errors.New("texto obrigatorio")}
+  if err=json.Unmarshal(m["tipo"],&kind);err!=nil{return nil,errors.New("tipo obrigatorio")}
+  if len(m["chave"])>0{if err=json.Unmarshal(m["chave"],&dedupe);err!=nil{return nil,errors.New("chave invalida")}}
+  reply,err:=a.live.publishChatReply(key,txt,kind,dedupe);if err!=nil{return nil,err}
+  v=map[string]any{"ok":true,"reply":reply,"dashboard":"http://127.0.0.1:8765/"}
+ case "consecom_chat_historico":v=a.live.chatHistory()
  case "consecom_live_resultados":v=a.live.reportsView()
  default:return nil,errors.New("unknown Live LAB tool")
  }
  rawResult,_:=json.Marshal(v)
  return map[string]any{"structuredContent":v,"content":[]map[string]any{{"type":"text","text":string(rawResult)}}},nil
 }
-func isLiveTool(s string)bool {return strings.HasPrefix(s,"consecom_live_")}
+func isLiveTool(s string)bool {return strings.HasPrefix(s,"consecom_live_")||strings.HasPrefix(s,"consecom_chat_")}

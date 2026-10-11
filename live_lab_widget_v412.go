@@ -13,8 +13,8 @@ button:hover{background:#269b77}.small{font-size:11px;color:#91adbf}label{displa
 article{border-top:1px solid #2c4252;padding:9px 0}article strong{font-size:12px}article p{font-size:12px;margin:3px 0;white-space:pre-wrap;overflow-wrap:anywhere}
 #events{max-height:260px;overflow:auto}
 </style></head><body>
-<section><h2>Consecom Live · mensagens</h2>
-<p>Escreva na Central de Controle do Consecom, no seu Windows. As mensagens chegam nesta conversa pelo mesmo MCP enquanto este componente estiver ativo.</p>
+<section><h2>Consecom Live · chat bidirecional</h2>
+<p>Escreva na Central de Controle do Consecom, no seu Windows. As mensagens chegam nesta conversa pelo mesmo MCP e a resposta do ChatGPT é devolvida ao painel Consecom.</p>
 <label><input id="auto" type="checkbox" checked> Permitir envio automático das mensagens digitadas no painel</label>
 <p id="status" role="status">Conectando...</p>
 <p class="small">Sem API paga ou segunda conexão. A confirmação do host não garante que o modelo já leu; consulte esta conversa. Fechar ou suspender o ChatGPT interrompe a recepção.</p>
@@ -48,8 +48,9 @@ function ask(ev,manual){
  observe(ev,mode,"attempt");
  let prompt;
  if(ev.kind==="PANEL_MESSAGE"){
-  prompt="Mensagem escrita pelo usuário na Central de Controle Consecom (Windows), entregue através do MCP existente. ID "+ev.id+".\n\n"+String(ev.message||"")+
-  "\n\nEsta mensagem veio do painel local Consecom. Responda ao pedido do usuário normalmente nesta conversa.";
+  prompt="MENSAGEM DO CHAT CONSECOM, digitada pelo usuário na Central de Controle do Windows. ID "+ev.id+".\n\n"+
+  String(ev.message||"")+
+  "\n\nCANAL DE RETORNO: Responda ao pedido normalmente e ANTES de finalizar publique a mesma resposta no painel Windows pela ferramenta MCP consecom_chat_responder, usando id="+ev.id+", texto com a resposta completa e tipo=final. A resposta deve ser uma chamada real de ferramenta, nao apenas uma afirmacao. Para trabalhos longos, publique primeiro tipo=andamento e ao terminar tipo=final. As demais ferramentas do Consecom continuam disponiveis, com as mesmas permissoes. Se a ferramenta de resposta nao aparecer, avise que a lista de ferramentas do MCP precisa ser atualizada; nao simule a entrega.";
  }else{
   prompt="Consecom Live LAB: analise o evento sintetico "+ev.id+" com consecom_live_ler_evento. Nao execute comandos nem altere arquivos; registre se este turno surgiu automaticamente.";
  }
