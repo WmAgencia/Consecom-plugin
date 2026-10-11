@@ -48,9 +48,9 @@ function ask(ev,manual){
  observe(ev,mode,"attempt");
  let prompt;
  if(ev.kind==="PANEL_MESSAGE"){
-  prompt="MENSAGEM DO CHAT CONSECOM, digitada pelo usuário na Central de Controle do Windows. Identificador "+ev.id+".\n\n"+
+  prompt="MENSAGEM DO CHAT CONSECOM, digitada pelo usuário na Central de Controle do Windows. ID "+ev.id+".\n\n"+
   String(ev.message||"")+
-  "\n\nCOMUNICAÇÃO DE DUAS VIAS: Responda normalmente nesta conversa e, antes de encerrar sua resposta, use obrigatoriamente a ferramenta MCP `consecom_chat_responder` com os argumentos `{id:"`+ev.id+`",texto:"sua resposta ao usuário",tipo:"final"}`. O usuário acompanha o retorno no painel Consecom. Se for uma tarefa demorada, publique também uma atualização breve com tipo:"andamento" antes de iniciar e depois a resposta final. Use as demais ferramentas e permissões normalmente; não simule trabalho realizado. Se a ferramenta de resposta não estiver disponível, explique que é necessário atualizar as ferramentas do MCP conectado.";
+  "\n\nCANAL DE RETORNO: Responda ao pedido normalmente e ANTES de finalizar publique a mesma resposta no painel Windows pela ferramenta MCP consecom_chat_responder, usando id="+ev.id+", texto com a resposta completa e tipo=final. A resposta deve ser uma chamada real de ferramenta, nao apenas uma afirmacao. Para trabalhos longos, publique primeiro tipo=andamento e ao terminar tipo=final. As demais ferramentas do Consecom continuam disponiveis, com as mesmas permissoes. Se a ferramenta de resposta nao aparecer, avise que a lista de ferramentas do MCP precisa ser atualizada; nao simule a entrega.";
  }else{
   prompt="Consecom Live LAB: analise o evento sintetico "+ev.id+" com consecom_live_ler_evento. Nao execute comandos nem altere arquivos; registre se este turno surgiu automaticamente.";
  }
