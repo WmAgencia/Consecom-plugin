@@ -48,6 +48,7 @@ type App struct {
 	devPreviews DevPreviewManager
 	workflows WorkflowManager
 	renders RenderManager
+	live *LiveLab
 }
 type ProcessTarget struct {
 	PID  int    `json:"pid"`
@@ -103,6 +104,9 @@ func NewApp(path string) (*App, error) {
   a.cfg.Browser=p
   if e:=a.saveLocked();e!=nil{return nil,e}
  }
+    // The LAB shares the existing MCP and authentication. Corrupt LAB state
+    // must never prevent the normal Consecom server from starting.
+    a.live,_=newLiveLab(filepath.Join(filepath.Dir(path),"live-lab-v412.json"))
 	return a, nil
 }
 func (a *App) saveLocked() error {
