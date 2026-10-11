@@ -45,6 +45,10 @@ func (a *App) handleRPC(body []byte) (any, bool) {
 	}
 	switch q.Method {
 	case "initialize":
+        var hello struct{ClientInfo struct{Name string `json:"name"`} `json:"clientInfo"`}
+        if json.Unmarshal(q.Params,&hello)==nil && hello.ClientInfo.Name!=""{
+            a.contextObserveMCPClient(hello.ClientInfo.Name)
+        }
 		return rpcResult(q.ID, map[string]any{"protocolVersion": "2025-11-25", "capabilities": map[string]any{"tools": map[string]any{"listChanged": false}}, "serverInfo": map[string]string{"name": "consecom-mcp", "version": consecomVersion}}), true
 	case "ping":
 		return rpcResult(q.ID, map[string]any{}), true
