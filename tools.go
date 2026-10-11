@@ -97,6 +97,7 @@ func tools() []Tool {
 		{"codigo_substituir_trecho","Substituir trecho unico no codigo com SHA256 de versao e backup, dentro de projeto com escrita permitida.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 retornado por codigo_ler_trecho"),"original":str("Texto exato a substituir"),"novo":str("Texto substituto")}, "root_id","caminho","sha256","original","novo"),mutating},
 		{"codigo_previsualizar_diff","Previsualizar diferencas antes de editar codigo; confirma SHA256 e unicidade sem gravar no disco.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 da leitura"),"original":str("Trecho original exato"),"novo":str("Trecho proposto")}, "root_id","caminho","sha256","original","novo"),readonly},
 		{"codigo_restaurar_backup","Restaurar um backup de codigo pelo ID registrado na edicao; exige checksum do arquivo atual e copia preventiva.",schema(map[string]any{"id":str("ID do backup retornado na edicao")},"id"),mutating},
+		{"codigo_formatar_go","Formatar arquivo Go de um projeto autorizado com gofmt, backup e verificacao de versao por SHA256.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo Go relativo"),"sha256":str("SHA256 original obtido na leitura")},"root_id","caminho","sha256"),mutating},
 		{"desktop_controles","Encontrar controles Win32 visiveis associados a uma janela, como botoes, menus e campos.",schema(map[string]any{"window":str("ID da janela")},"window"),readonly},
 		{"desktop_controle_clicar","Clicar no centro de um controle Win32 valido, na propria janela. Respeita modo de aprovacao local.",schema(map[string]any{"window":str("ID da janela"),"controle":str("ID do controle obtido em desktop_controles")},"window","controle"),mutating},
 		{"programas_criativos","Detectar disponibilidade de FFmpeg, FFprobe, Blender, ImageMagick, Python e Node sem executar tarefas.",schema(map[string]any{}),readonly},
@@ -144,6 +145,13 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 	case "codigo_restaurar_backup":
 		id,e:=argStr(args,"id");if e!=nil{return nil,e}
 		return a.codeRestoreRequest(id)
+	case "codigo_formatar_go":
+		var spec FormatGoSpec
+		var e error
+		spec.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		spec.Path,e=argStr(args,"caminho");if e!=nil{return nil,e}
+		spec.ExpectedSHA,e=argStr(args,"sha256");if e!=nil{return nil,e}
+		return a.codeFormatGoRequest(spec)
 	case "codigo_buscar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		term,e:=argStr(args,"termo");if e!=nil{return nil,e}
@@ -557,6 +565,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.codeEditApproved(p)
 	case "coderestore":
 		return a.codeRestoreApproved(p)
+	case "codeformat":
+		return a.codeFormatGoApproved(p)
 	case "videorender":
 		return a.videoRenderApproved(p)
 	case "winchild":
