@@ -72,6 +72,9 @@ func tools() []Tool {
 		{"atualizacao_verificar", "Consulta releases do repositório GitHub confiável cadastrado localmente; não instala nada.", schema(map[string]any{}), readonly},
 		{"atualizacao_solicitar", "SOLICITA INSTALAR atualização de um release confiável do GitHub. Verifica SHA-256; exige confirmação no painel, exceto se o usuário habilitou atualizações remotas desse repositório. Reinicia Consecom e pode interromper o túnel temporariamente.", schema(map[string]any{}), map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}},
 
+		{"dev_job_iniciar","Iniciar comando de desenvolvimento de uma lista permitida, com limite de tempo, log e aprovacao local para builds/scripts.",schema(map[string]any{"root_id":str("Pasta de projeto autorizada"),"acao":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}},"root_id","acao"),mutating},
+		{"dev_job_status","Consultar status e log parcial de uma execucao por ID.",schema(map[string]any{"id":str("ID de execucao")},"id"),readonly},
+		{"dev_job_cancelar","Solicitar cancelamento de uma execucao em andamento.",schema(map[string]any{"id":str("ID de execucao")},"id"),mutating},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -94,6 +97,16 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		}
 	}
 	switch name {
+	case "dev_job_iniciar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
+		return a.devJobStart(id,action,false)
+	case "dev_job_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.devJobStatus(id)
+	case "dev_job_cancelar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.devJobCancel(id)
 	case "dev_execucao":
 		rootID, e := argStr(args, "root_id")
 		if e != nil {
@@ -369,6 +382,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveUpdate(p)
 	case "dev":
 		return a.approveDeveloper(p)
+	case "devjob":
+		return a.approveDevJob(p)
 	case "close":
 		errs := []string{}
 		for _, t := range p.Processes {
