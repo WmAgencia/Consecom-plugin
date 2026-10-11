@@ -142,7 +142,7 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 			pErr = pe.Error()
 		}
 		power, _ := a.boosterStatus()
-		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus(), "inbox": a.inbox.list()})
+		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
 	case "/api/browser/options":
 		content(w, a.browserOptions())
 	case "/api/browser/default":
@@ -151,18 +151,6 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, "preferencia de navegador atualizada", a.setBrowserPreference(p))
-	case "/api/tasks":
-		content(w, map[string]any{"tasks": a.inbox.list(), "note": "Pedidos livres aguardam leitura do ChatGPT; apenas diagnósticos predefinidos executam a cada 10s."})
-	case "/api/tasks/add":
-		var q struct {
-			Tipo   string `json:"tipo"`
-			Pedido string `json:"pedido"`
-		}
-		if !decode(w, r, &q) {
-			return
-		}
-		t, e := a.inbox.add(q.Tipo, q.Pedido)
-		respond(w, t, e)
 	case "/api/updates/status":
 		content(w, a.updateStatus())
 	case "/api/updates/settings":
@@ -293,20 +281,6 @@ func respond(w http.ResponseWriter, result any, e error) {
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", a.mcpHandler)
-	mux.HandleFunc("/chat-ui.css", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		b, err := chatAssets.ReadFile("chat_ui.css")
-		if err != nil { http.Error(w, "Recurso indisponivel", 500); return }
-		_, _ = w.Write(b)
-	})
-	mux.HandleFunc("/chat-ui.js", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		b, err := chatAssets.ReadFile("chat_ui.js")
-		if err != nil { http.Error(w, "Recurso indisponivel", 500); return }
-		_, _ = w.Write(b)
-	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -414,9 +388,6 @@ func main() {
 		log.SetOutput(f)
 		defer f.Close()
 	}
-	stopWorker := make(chan struct{})
-	go a.inbox.runLoop(a, stopWorker)
-	defer close(stopWorker)
 	listener, e := net.Listen("tcp", listenAddr)
 	if e != nil {
 		c := http.Client{Timeout: 1 * time.Second}
