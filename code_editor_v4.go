@@ -54,7 +54,7 @@ func (a *App) codeSearch(rootID,term string)(any,error){
   if walkErr!=nil{return nil}
   rel,err:=filepath.Rel(root.Path,path);if err!=nil{return nil}
   if rel=="."{return nil}
-  if entry.Type()&os.ModeSymlink!=0{return nil}
+  if entry.Type()&(os.ModeSymlink|os.ModeIrregular)!=0{return nil}
   if entry.IsDir(){
    if blockedPart(entry.Name())||strings.HasPrefix(entry.Name(),".")||entry.Name()=="dist"||entry.Name()=="build" {return filepath.SkipDir}
    return nil
