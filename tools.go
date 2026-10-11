@@ -17,7 +17,6 @@ type Tool struct {
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
 	Annotations map[string]any `json:"annotations"`
-	Meta map[string]any `json:"_meta,omitempty"`
 }
 
 func schema(fields map[string]any, required ...string) map[string]any {
