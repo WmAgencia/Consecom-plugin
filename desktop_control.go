@@ -17,6 +17,8 @@ type DesktopAction struct {
  Y int `json:"y"`
  Text string `json:"text"`
  App string `json:"app"`
+ AppID string `json:"app_id,omitempty"`
+ Executable string `json:"caminho_absoluto,omitempty"`
 }
 var captureMu sync.Mutex
 var latestCapture string
@@ -25,6 +27,10 @@ func (a *App) desktopRequest(kind string, action DesktopAction)(any,error){
  switch kind {
  case "open":
   if action.App!="notepad"&&action.App!="calculator"&&action.App!="explorer"&&action.App!="vscode" {return nil,errors.New("aplicativo fora da lista")}
+ case "open_installed":
+  if _,err:=validRegisteredApp(action.AppID);err!=nil{return nil,err}
+ case "open_executable":
+  if _,err:=validatePortableWindowsExe(action.Executable);err!=nil{return nil,err}
  case "activate","click","type","capture":
   if action.Window==0 {return nil,errors.New("identificador da janela obrigatorio")}
   if kind=="click"&&(action.X<0||action.Y<0||action.X>5000||action.Y>5000){return nil,errors.New("coordenadas invalidas")}
@@ -35,7 +41,9 @@ func (a *App) desktopRequest(kind string, action DesktopAction)(any,error){
  desc:="Controle visual do Windows: "+kind
  if kind=="type" {desc+=fmt.Sprintf(" (%d caracteres; texto: %q)",len([]rune(action.Text)),clip(action.Text,180))}
  if kind=="open" {desc+=" "+action.App}
- if kind!="open" {desc+=fmt.Sprintf(" na janela %d",action.Window)}
+ if kind=="open_installed" {desc+=" aplicativo registrado "+action.AppID}
+ if kind=="open_executable" {desc+=" executavel "+action.Executable}
+ if kind!="open"&&kind!="open_installed"&&kind!="open_executable" {desc+=fmt.Sprintf(" na janela %d",action.Window)}
  p:=&Pending{Kind:"desktop",Action:kind,Content:string(data),Description:desc}
  if a.mode()=="maximum" {
   result,e:=a.approveDesktop(p)
@@ -78,7 +86,7 @@ func desktopArg(args map[string]json.RawMessage)(DesktopAction,error){
    var n uint64;if e:=json.Unmarshal(raw,&n);e!=nil{return out,e};out.Window=n
   }
  }
- out.App=optionalString(args,"app");out.Text=optionalString(args,"texto")
+ out.App=optionalString(args,"app");out.AppID=optionalString(args,"app_id");out.Executable=optionalString(args,"caminho_absoluto");out.Text=optionalString(args,"texto")
  if len(args["x"])>0 {if e:=json.Unmarshal(args["x"],&out.X);e!=nil{return out,e}}
  if len(args["y"])>0 {if e:=json.Unmarshal(args["y"],&out.Y);e!=nil{return out,e}}
  return out,nil

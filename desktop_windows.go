@@ -107,6 +107,8 @@ func desktopWindow(id uint64)(desktopEntry,desktopRect,error){
  return desktopEntry{},rect,errors.New("janela nao esta visivel ou esta protegida")
 }
 func desktopPerform(op string,a DesktopAction)(string,error){
+ if op=="open_installed" {return launchRegisteredWindowsApp(a.AppID)}
+ if op=="open_executable" {return launchPortableWindowsExe(a.Executable)}
  if op=="open" {
   binaries:=map[string]string{"notepad":"notepad.exe","calculator":"calc.exe","explorer":"explorer.exe","vscode":"code"}
   bin:=binaries[a.App];if bin==""{return "",errors.New("aplicativo nao autorizado")}

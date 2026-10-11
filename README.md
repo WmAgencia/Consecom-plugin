@@ -98,3 +98,18 @@ Quando o usuário habilita **Aprovação máxima** no próprio painel (confirma�
 - Se o ChatGPT bloquear uma acao no cliente antes que ela chegue ao MCP, a alteracao do Consecom nao tem como remover esse bloqueio.
 
 - Ao ativar o modo maximo, pedidos antigos de aprovacao local de outros modos sao **cancelados, jamais executados automaticamente**. Reenvie a acao que deseja executar. Um pedido de atualizacao remota permanece pendente por usar uma permissao separada.
+
+
+### 4.2.0 — Abrir aplicativos do Windows sem lista fixa
+
+O Consecom possui tres novas ferramentas MCP:
+
+- \`desktop_aplicativos\`: pesquisa nomes e IDs de aplicativos registrados no menu Iniciar (inclusive apps da Microsoft Store, como **Relogio**). Informe \`pesquisa\` ou deixe vazia para exibir ate 120 resultados.
+- \`desktop_abrir_instalado\`: abre um dos aplicativos retornados pelo seu \`app_id\` exato, usando o mecanismo nativo \`shell:AppsFolder\` do Windows, sem argumentos extras. Caso haja nomes semelhantes, escolha pelo ID descoberto, nunca por suposicao.
+- \`desktop_abrir_executavel\`: abre um arquivo \`.exe\` local existente por caminho absoluto, tambem sem parametros. Cobre programas portateis nao registrados no menu Iniciar. Atalhos \`.lnk\`, scripts, arquivos de lote e caminhos de rede nao sao executados por essa ferramenta.
+
+Em **Aprovacao Maxima**, ambas as ferramentas de abertura executam diretamente, sem gerar nova aprovacao no painel Consecom. Nos demais modos, continuam exigindo a confirmacao local normal. O modo maximo nao contorna autorizacoes do ChatGPT, Windows/UAC, protecoes de pastas do sistema nem permite iniciar com privilegios elevados silenciosamente.
+
+Fluxo recomendado: procurar \`Relogio\` em \`desktop_aplicativos\`, escolher o \`app_id\` real, chamar \`desktop_abrir_instalado\`, verificar a janela com \`desktop_janelas\` e usar controle visual para configurar um alarme. **Abrir o aplicativo nao significa que um alarme foi criado**: confirme a configuracao na interface. Alarmes de aplicativos podem ser recorrentes; uma ocorrencia em dia especifico requer verificar o comportamento do Relogio instalado.
+
+Limites: a lista reflete os aplicativos que o perfil Windows atual registra no menu Iniciar; executaveis adicionais podem ser abertos pelo caminho absoluto. Aplicativos do sistema protegidos, comandos arbitrarios, scripts e elevacao UAC automatica continuam vedados.

@@ -83,6 +83,9 @@ func tools() []Tool {
 		{"git_branch_criar","Criar branch Git em projeto autorizado; execucao direta no modo maximo.",schema(map[string]any{"root_id":str("ID do projeto"),"nome":str("Nome da branch")},"root_id","nome"),mutating},
 		{"desktop_janelas","Listar somente janelas visiveis de aplicativos nao protegidos, sem interagir.",schema(map[string]any{}),readonly},
 		{"desktop_abrir","Abrir app permitido; modo maximo executa diretamente.",schema(map[string]any{"app":map[string]any{"type":"string","enum":[]string{"notepad","calculator","explorer","vscode"}}},"app"),mutating},
+		{"desktop_aplicativos","Pesquisar aplicativos registrados no Menu Iniciar do Windows, inclusive Relogio e Microsoft Store. Retorna o identificador de cada app, sem abrir ou alterar nada.",schema(map[string]any{"pesquisa":str("Nome ou parte do nome. Vazio lista ate 120 apps; selecione pelo app_id.")}),readonly},
+		{"desktop_abrir_instalado","Abrir app do Menu Iniciar por app_id retornado em desktop_aplicativos, sem linha de comando; no modo maximo sem aprovacao Consecom adicional.",schema(map[string]any{"app_id":str("ID exato retornado por desktop_aplicativos") },"app_id"),mutating},
+		{"desktop_abrir_executavel","Iniciar um programa .exe local pelo caminho absoluto, SEM argumentos, scripts, shell ou elevacao automatica. Nao permite pastas Windows/sistema, rede ou area privada do Consecom. Modo maximo dispensa confirmacao local adicional.",schema(map[string]any{"caminho_absoluto":str("Caminho local absoluto do executavel .exe, como C:\\Program Files\\App\\app.exe") },"caminho_absoluto"),mutating},
 		{"desktop_ativar","Ativar janela visivel; modo maximo executa diretamente.",schema(map[string]any{"window":str("ID numerico da janela como string")},"window"),mutating},
 		{"desktop_clicar","Clicar dentro da janela; modo maximo executa diretamente.",schema(map[string]any{"window":str("ID da janela"),"x":map[string]any{"type":"integer"},"y":map[string]any{"type":"integer"}},"window","x","y"),mutating},
 		{"desktop_digitar","Digitar texto em janela visivel permitida; modo maximo executa diretamente.",schema(map[string]any{"window":str("ID da janela"),"texto":str("Texto de ate 1000 caracteres")},"window","texto"),mutating},
@@ -247,14 +250,18 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		n,e:=argStr(args,"nome");if e!=nil{return nil,e}
 		return a.gitBranchRequest(id,n)
+	case "desktop_aplicativos":
+		return windowsAppsSearch(optionalString(args,"pesquisa"))
 	case "desktop_janelas":
 		return desktopEntries()
 	case "desktop_ultima_captura":
 		return desktopLatestCapture()
-	case "desktop_abrir","desktop_ativar","desktop_clicar","desktop_digitar","desktop_capturar":
+	case "desktop_abrir","desktop_abrir_instalado","desktop_abrir_executavel","desktop_ativar","desktop_clicar","desktop_digitar","desktop_capturar":
 		item,e:=desktopArg(args);if e!=nil{return nil,e}
 		switch name{
 		case "desktop_abrir": return a.desktopRequest("open",item)
+		case "desktop_abrir_instalado": return a.desktopRequest("open_installed",item)
+		case "desktop_abrir_executavel": return a.desktopRequest("open_executable",item)
 		case "desktop_ativar": return a.desktopRequest("activate",item)
 		case "desktop_clicar": return a.desktopRequest("click",item)
 		case "desktop_digitar": return a.desktopRequest("type",item)
