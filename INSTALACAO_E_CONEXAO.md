@@ -1,14 +1,25 @@
-# Consecom Plugin 2.6 — instalação e conexão
+# Consecom Plugin — instalação 2.7.2
 
-1. Instale a atualização por cima da 2.5. **Não desinstale a versão existente**. O arquivo de configuração, o túnel oficial e perfis de navegador ficam preservados.
-2. Abra `http://127.0.0.1:8765`; verifique a versão **2.6.0** e o estado do túnel.
-3. No ChatGPT, atualize a lista de ferramentas do plugin. São esperadas **42 ferramentas**.
-4. Clique em **Atualizar agora** para verificar a release configurada. Se ainda não houver repositório confiável, selecione **Configurar** e informe `dono/repositorio` depois de publicar a release.
-5. Para o terminal, cadastre a pasta do seu projeto em **Pastas autorizadas**; use `dev_execucao` via ChatGPT. Para rodar `npm test/build/lint`, abra o painel local e aprove o comando específico.
-6. No painel, escreva pedidos em **Pedidos ao Consecom**. Diagnóstico e versão são processados automaticamente a cada 10 s. Pedidos livres aguardam o atendimento do ChatGPT via `tarefas_listar` e `tarefas_responder`; esse chat **não** recebe notificações instantâneas da fila.
+## Atualizar pelo painel
 
-O chat no celular consegue chamar as ferramentas remotas sempre que o plugin estiver ativo, PC e túnel conectados. Um agente 24h autônomo exige integração de API externa e controle próprio de execução/custos — não está incluído nesta versão.
+1. Abra `http://127.0.0.1:8765` no Windows.
+2. Clique em **Atualizar**, na parte inferior da barra lateral, acima de **Servidor MCP**.
+3. O programa consulta a release oficial de `WmAgencia/Consecom-plugin`, valida versão e SHA-256, baixa o instalador e executa a atualização.
+4. Aguarde o servidor e o túnel reiniciarem. A partir da v2.7.2, a página verifica o reinício e recarrega automaticamente. Ao migrar de versões anteriores, use Ctrl+Shift+R caso a página não se atualize.
+5. No ChatGPT, atualize o catálogo do plugin MCP se ferramentas antigas ainda aparecerem. Esta versão apresenta **40 ferramentas**.
 
-## Atualizações oficiais desde v2.6.1
+## Primeira instalação
 
-A origem oficial está fixa em `WmAgencia/Consecom-plugin`; não é necessário cadastrar repositório no painel. O botão **Atualizar** fica no canto inferior esquerdo, acima de **Servidor MCP**. Um clique verifica a versão, baixa o instalador, valida seu SHA-256 e inicia a instalação quando houver versão mais recente. Atualizações iniciadas remotamente pelo ChatGPT mantêm a política de aprovação local, salvo autorização prévia explícita. Para migrar de uma versão anterior que ainda exige configuração de repositório, instale a v2.6.1 uma vez pelo GitHub Releases.
+Utilize o instalador da [última release oficial](https://github.com/WmAgencia/Consecom-plugin/releases/latest), mantendo a instalação existente. Não desinstale para atualizar. A configuração e as credenciais criptografadas do túnel são preservadas.
+
+## Estrutura do painel
+
+- **Painel:** métricas, discos, políticas de aprovação, navegador e permissões de pastas.
+- **Laboratório de Agentes:** registros e atividades de agentes conectados.
+- **Atualizar:** botão lateral fixo com origem GitHub já predefinida.
+
+A interface de conversa e o formulário de mensagens foram removidos nesta versão. O histórico local antigo não é excluído.
+
+## Segurança
+
+Acesso local: `127.0.0.1:8765`. Scripts npm exigem aprovação. O controle do navegador tem bloqueios para ações sensíveis; nunca informe senhas pelo chat. O ChatGPT não fica consultando a máquina por conta própria sem a conversa ativa.
