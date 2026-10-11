@@ -39,6 +39,7 @@ type broker struct {
 	listeners map[chan event]struct{}
 	notify chan struct{}
 	journal string
+    observations []hostObservation
 }
 
 func newBroker() *broker { return &broker{listeners:make(map[chan event]struct{}),notify:make(chan struct{})} }
@@ -319,6 +320,8 @@ func (a *app) mux() http.Handler {
 	m.HandleFunc("/mcp", a.routeMCP)
 	m.HandleFunc("/events", a.routeEvents)
 	m.HandleFunc("/demo/emit", a.routeEmit)
+    m.HandleFunc("/demo/widget-report",a.recordObservation)
+    m.HandleFunc("/demo/widget-observations",a.listObservations)
 	m.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 200, map[string]string{"status": "ok", "mode": "synthetic-only"})
 	})
