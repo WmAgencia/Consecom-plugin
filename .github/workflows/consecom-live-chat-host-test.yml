@@ -76,7 +76,17 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "MCP_TEST_URL=$origin/mcp"
           # Make the ephemeral URL visible while the job is RUNNING.
-          gh issue comment 20 --repo WmAgencia/Consecom-plugin --body "🧪 **Consecom Live Chat Host active:** \`$origin/mcp\` (no auth, synthetic-only, expires in about 18 minutes). Connect in Plugins and request consecom_live_abrir in an ordinary ChatGPT Chat. Run: https://github.com/WmAgencia/Consecom-plugin/actions/runs/$GITHUB_RUN_ID"
+          # Use REST, not gh issue comment GraphQL, which may be restricted for Actions tokens.
+          body="$(jq -n --arg address "$origin/mcp" --arg run "$GITHUB_RUN_ID" '{body:("Consecom Live temporary MCP (synthetic only, valid approximately 18 minutes): " + $address + "\\nRun ID: " + $run) }')"
+          code="$(curl -sS -o /tmp/comment-response.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" -d "$body" \
+            https://api.github.com/repos/WmAgencia/Consecom-plugin/issues/20/comments || true)"
+          if [[ "$code" == "201" ]]; then
+            echo "Temporary MCP URL announced on pull request #20"
+          else
+            echo "::warning::Could not post dynamic URL (HTTP $code). Keeping the safe lab alive."
+          fi
 
       - name: Keep test online and emit synthetic events
         shell: bash
