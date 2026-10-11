@@ -17,7 +17,7 @@ func contextFixture(t *testing.T)(*App,string){
  obsDir:=filepath.Join(appdata,"obsidian")
  if err:=os.MkdirAll(obsDir,0700);err!=nil{t.Fatal(err)}
  bytes,err:=json.Marshal(map[string]any{"vaults":map[string]any{
-  "vaultid":{"path":vault,"open":true},
+  "vaultid":map[string]any{"path":vault,"open":true},
  }})
  if err!=nil{t.Fatal(err)}
  if err:=os.WriteFile(filepath.Join(obsDir,"obsidian.json"),bytes,0600);err!=nil{t.Fatal(err)}
@@ -54,7 +54,7 @@ func TestContextVaultChoiceSourceBackfillAndObsidianSync(t *testing.T){
  if err!=nil{t.Fatal(err)}
  link:=saved2.(map[string]any)["note"].(ContextNote)
  linked,err:=a.contextReadNote(link.ID);if err!=nil{t.Fatal(err)}
- if !strings.Contains(linked.(map[string]any)["content"],strings.TrimSuffix(note.Filename,".md")){t.Fatal("note relation backlink missing")}
+ if !strings.Contains(linked.(map[string]any)["content"].(string),strings.TrimSuffix(note.Filename,".md")){t.Fatal("note relation backlink missing")}
  if _,err:=a.contextSaveNote(s.ID,"X","Y",[]string{"unregistered"});err==nil{t.Fatal("missing relation accepted")}
  if _,err:=a.contextReadNote("abcdef");err==nil{t.Fatal("invalid note id accepted")}
  if _,err:=a.contextReadNote(strings.Repeat("a",32));err==nil{t.Fatal("unregistered note read accepted")}
