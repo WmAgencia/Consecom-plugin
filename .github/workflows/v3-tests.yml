@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/consecom-v3-release
+      - fix/v3-maximum-approval
   workflow_dispatch:
 permissions:
   contents: read
