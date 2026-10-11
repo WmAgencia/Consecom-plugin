@@ -33,7 +33,12 @@ func TestAgentBrowserURLSafety(t *testing.T){
 }
 
 func TestAgentBrowserSnapshotRefAndSensitiveActions(t *testing.T){
- snap:="- link \\"Pagina Inicial\\" [ref=e1]\n- button \\"Comprar agora\\" [ref=e2]\n- textbox \\"Busca\\" [ref=e3]\n- textbox \\"Senha\\" [ref=e4]\n- link \\"Delete Account\\" [ref=e5]\n- link \\"Artigo\\" [ref=e20]"
+ snap:=`- link "Pagina Inicial" [ref=e1]
+- button "Comprar agora" [ref=e2]
+- textbox "Busca" [ref=e3]
+- textbox "Senha" [ref=e4]
+- link "Delete Account" [ref=e5]
+- link "Artigo" [ref=e20]`
  cases:=[]struct{ref,contains string}{
   {"@e1","Pagina Inicial"},{"@e2","Comprar"},{"@e3","Busca"},{"@e4","Senha"},{"@e5","Delete"},{"@e20","Artigo"},
  }
@@ -76,7 +81,10 @@ func TestAgentBrowserDeniedActionsNoExternalRun(t *testing.T){
  a.agentBrowser.Name="consecom-test"
  a.agentBrowser.Host="example.org"
  a.agentBrowser.Allowed="example.org,*.example.org"
- a.agentBrowser.LastSnapshot="- link \\"Home\\" [ref=e1]\n- button \\"Pay Now\\" [ref=e2]\n- textbox \\"Password\\" [ref=e3]\n- link \\"Delete Account\\" [ref=e4]"
+ a.agentBrowser.LastSnapshot=`- link "Home" [ref=e1]
+- button "Pay Now" [ref=e2]
+- textbox "Password" [ref=e3]
+- link "Delete Account" [ref=e4]`
  if _,err:=a.agentBrowserClick("@e2");err==nil{t.Fatal("buttons cannot be clicked")}
  if _,err:=a.agentBrowserClick("@e4");err==nil{t.Fatal("delete links cannot be clicked")}
  if _,err:=a.agentBrowserFill("@e3","topsecret");err==nil{t.Fatal("password field cannot be filled")}
