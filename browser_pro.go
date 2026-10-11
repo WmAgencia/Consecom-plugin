@@ -27,7 +27,8 @@ func (a *App) browserEnableDownloads()(any,error){
  s:=a.browserControl.session
  if s==nil{return nil,errors.New("abra navegador primeiro")}
  dir,e:=a.browserDownloadDir();if e!=nil{return nil,e}
- _,e=cdpCall(s,"Page.setDownloadBehavior",map[string]any{"behavior":"allow","downloadPath":dir})
+ _,e=cdpCall(s,"Browser.setDownloadBehavior",map[string]any{"behavior":"allow","downloadPath":dir})
+ if e!=nil { _,e=cdpCall(s,"Page.setDownloadBehavior",map[string]any{"behavior":"allow","downloadPath":dir}) }
  if e!=nil{return nil,e}
  return map[string]any{"status":"downloads_habilitados","scope":"diretorio privado do Consecom","note":"arquivos so sao copiados para projetos com aprovacao local"},nil
 }
