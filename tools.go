@@ -71,6 +71,8 @@ func tools() []Tool {
 		{"browser_rolar", "Rolar a aba controlada verticalmente ate 2500 pixels por chamada.", schema(map[string]any{"pixels": map[string]any{"type": "integer", "minimum": -2500, "maximum": 2500}}), mutating},
 		{"browser_capturar_tela", "Captura uma imagem JPEG da aba controlada e envia ao ChatGPT. Pode conter dados privados visiveis na tela; use somente mediante pedido de visualizacao.", schema(map[string]any{}), readonly},
 		{"browser_qa_auditar","Auditar SEO e acessibilidade estrutural na aba pertencente ao Consecom: title, meta, H1, imagens quebradas, campos sem rotulo e overflow. Nao le credenciais.",schema(map[string]any{}),readonly},
+		{"browser_qa_instrumentar","Ativar monitor de categorias de erros JavaScript e console.error somente na aba Consecom, inclusive navegacoes futuras da mesma aba; nao exporta argumentos ou payloads.",schema(map[string]any{}),mutating},
+		{"browser_qa_erros","Ler apenas contagens de categorias de erros na aba Consecom previamente instrumentada, sem mensagens, cookies nem dados de console.",schema(map[string]any{}),readonly},
 		{"browser_qa_responsivo","Capturar e inspecionar aba controlada em tamanhos mobile/tablet/desktop e restaurar o viewport original; screenshots podem incluir dados pessoais visiveis.",schema(map[string]any{"viewport":map[string]any{"type":"string","enum":[]string{"mobile","tablet","desktop"}}},"viewport"),readonly},
 		{"browser_fechar_aba", "Fechar apenas a aba criada/controlada pelo Consecom, sem fechar seu navegador pessoal.", schema(map[string]any{}), mutating},
 		{"dev_execucao", "Executar comandos fixos de desenvolvimento dentro de projeto autorizado. npm test/build/lint exigem aprovacao em modo normal/categoria; no modo maximo executam diretamente, com timeout e validacao de escopo.", schema(map[string]any{"root_id": str("ID da pasta de projeto autorizada"), "acao": map[string]any{"type": "string", "enum": []string{"git_status", "git_branch", "git_diff_stat", "git_log", "node_version", "npm_version", "npm_test", "npm_build", "npm_lint"}}}, "root_id", "acao"), mutating},
@@ -331,6 +333,8 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 	case "atualizacao_solicitar":
 		return a.updateRequest()
 	case "browser_qa_auditar":
+		return a.browserQATool(name,"")
+	case "browser_qa_instrumentar","browser_qa_erros":
 		return a.browserQATool(name,"")
 	case "browser_qa_responsivo":
 		viewport,e:=argStr(args,"viewport");if e!=nil{return nil,e}
