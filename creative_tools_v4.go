@@ -57,7 +57,7 @@ func (a *App) inspectVideo(rootID,relative string)(any,error){
  if !stat.Mode().IsRegular()||stat.Size()>5*1024*1024*1024{return nil,errors.New("arquivo de video irregular ou acima de 5 GiB")}
  bin,e:=exec.LookPath("ffprobe");if e!=nil{return nil,errors.New("FFprobe nao instalado; verifique programas_criativos")}
  ctx,cancel:=context.WithTimeout(context.Background(),20*time.Second);defer cancel()
- cmd:=exec.CommandContext(ctx,bin,"-v","error","-show_entries","format=duration,size,format_name:stream=codec_name,codec_type,width,height,r_frame_rate","-of","json","--",path)
+ cmd:=exec.CommandContext(ctx,bin,"-v","error","-show_entries","format=duration,size,format_name:stream=codec_name,codec_type,width,height,r_frame_rate","-of","json","-i",path)
  out,e:=cmd.Output();if e!=nil{return nil,e}
  if len(out)>16000{return nil,errors.New("metadados acima do limite")}
  var data any
