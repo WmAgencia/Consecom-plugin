@@ -67,11 +67,11 @@ func TestToolListSchemaSerialization(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := obj["result"].(map[string]any)
-	tools := result["tools"].([]any)
-	if len(tools) != 112 {
-		t.Fatalf("tool count %d", len(tools))
+	items := result["tools"].([]any)
+	if len(items) != len(tools()) + len(liveToolSpecs()) {
+		t.Fatalf("tool count %d", len(items))
 	}
-	for _, it := range tools {
+	for _, it := range items {
 		tool := it.(map[string]any)
 		schema := tool["inputSchema"].(map[string]any)
 		if v, exists := schema["required"]; exists && v == nil {
