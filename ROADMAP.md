@@ -22,3 +22,12 @@
 15. **Administração do Windows supervisionada**: Wi‑Fi, energia, drivers e atualizações de sistema apenas com confirmação presencial; nunca credenciais/segredos.
 
 As funcionalidades desta lista são propostas, não estão implementadas no Consecom 2.5.
+
+## Fases seguintes a v4.0.0
+- Controle visual por Microsoft UI Automation (UIA) de apps modernos, com arvore semantica, foco, estados e formularios.
+- Estudio de videos: Remotion/FFmpeg, verificacao de frames, transcricoes, legendas, motion e exportacao.
+- Integracao Blender Python/render local se o Blender estiver instalado.
+- Integracao com editores de imagem e projetos em camadas: GIMP/Krita/Inkscape quando disponiveis.
+- Motor de tarefas com checkpoints, dependencia, recuperacao, agendamentos e execucao independente de chat via servico local configurado.
+- Administracao elevada **por UAC** para tarefas privilegiadas delimitadas, auditadas e com desligamento de emergencia, sem burlar protecoes Windows.
+- Recursos adicionais: busca global por escopo, instalador WinGet, diagnosticos de rede, monitoramento, Office e backup.

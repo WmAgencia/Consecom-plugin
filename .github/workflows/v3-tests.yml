@@ -4,6 +4,7 @@ on:
     branches:
       - feature/consecom-v3-release
       - fix/v3-maximum-approval
+      - feature/v4-editor-ui-creative-workflows
   workflow_dispatch:
 permissions:
   contents: read

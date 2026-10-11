@@ -2,7 +2,7 @@
 
 Integração controlada entre o ChatGPT e um computador Windows por meio de um servidor MCP local e túnel privado.
 
-**Versão atual do projeto:** 3.0.1
+**Versão atual do projeto:** 4.0.0
 
 ## Recursos
 
@@ -56,3 +56,13 @@ O repositório oficial é `WmAgencia/Consecom-plugin`; use **Atualizar** no menu
 Quando o usuário habilita **Aprovação máxima** no próprio painel (confirmação `LIBERAR`), as operações permitidas das ferramentas v3 passam a executar diretamente, sem uma nova aprovação para cada ação: abrir e controlar janelas, capturar telas, builds/scripts autorizados, operações de Git e transferências/cliques no navegador. Nos modos **Sempre perguntar** e **Por categoria** continuam valendo os requisitos de aprovação anteriores.
 
 **Importante:** Aprovação máxima elimina a aprovação local repetida, não as restrições técnicas. Comandos continuam limitados à lista permitida, Git/builds precisam de pasta de projeto autorizada, áreas de sistema/credenciais e caminhos perigosos continuam bloqueados, e o navegador só controla a sessão selecionada. A política independente de atualização remota do programa não é alterada.
+
+## Consecom v4.0.0 — Primeira etapa
+
+10 novas ferramentas MCP (69 no total):
+- **Editor de codigo**: buscar termos em ate 250 arquivos de projetos autorizados; ler ate 160 linhas com SHA-256; substituir trecho unico com verificacao de versao e backup.
+- **Windows visual**: descobrir controles Win32 de uma janela e clicar por ID real, respeitando modo de aprovacao.
+- **Criatividade**: detectar Blender, FFmpeg, FFprobe, ImageMagick, Python e Node; inspecionar metadados de videos com FFprobe. **Ainda nao edita nem renderiza videos automaticamente.**
+- **Fluxos de tarefas**: executar ate 6 comandos de desenvolvimento predefinidos sequencialmente, interrompendo se um falhar. Acompanhar etapa, logs e cancelar. O fluxo nao e um agente IA independente de conversas.
+
+**Seguranca:** ferramentas limitadas a pastas autorizadas e listas de comandos, sem shell arbitrario, captura de credenciais ou elevacao silenciosa. Acesso administrativo futuro deve usar UAC, registros e escopos especificos.
