@@ -8,6 +8,7 @@ import (
  "path/filepath"
  "runtime"
  "strings"
+ "strconv"
  "testing"
  "time"
 )
@@ -66,6 +67,17 @@ func TestPreviewSecurityAndApproval(t *testing.T){
  if !strings.HasPrefix(status.(map[string]any)["url"].(string),"http://127.0.0.1:"){t.Fatal("preview bound outside loopback")}
  stopped,err:=a.previewStop(id);if err!=nil{t.Fatal(err)}
  if stopped.(map[string]any)["status"]!="stopped"{t.Fatal("stop unsuccessful")}
+ // On Windows npm launches cmd.exe and a Node child. Ensure the child, not
+ // just its parent, is gone before considering previewStop successful.
+ stopDeadline:=time.Now().Add(8*time.Second)
+ closed:=false
+ for time.Now().Before(stopDeadline){
+  conn,dialErr:=net.DialTimeout("tcp",net.JoinHostPort("127.0.0.1",strconv.Itoa(port)),300*time.Millisecond)
+  if dialErr!=nil{closed=true;break}
+  _=conn.Close()
+  time.Sleep(200*time.Millisecond)
+ }
+ if !closed{t.Fatal("preview port still accepts connections after stop; child process likely orphaned")}
  if _,err:=a.previewStop(id);err==nil{t.Fatal("second stop should be rejected")}
  if len(a.pendings())!=0{t.Fatal("maximum mode queued approval")}
 }
