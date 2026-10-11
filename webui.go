@@ -330,11 +330,13 @@ async function refreshConsecomChat(force=false){
      queueWarning='A mensagem está na fila há '+Math.round(age/1000)+'s. Reabra o Consecom Live no ChatGPT.';
     }
    }
+   const staleClaim=messages.find(m=>m.role==='user'&&m.status==='claimed'&&!m.dispatched_at&&m.claimed_at&&Date.now()-Date.parse(m.claimed_at)>=120000);
+   const claimWarning=staleClaim?'Mensagem '+staleClaim.id+' ficou sem confirmação de envio. Confira a conversa antes de reenviar.':'';
    const awaiting=messages.filter(m=>m.role==='user'&&m.status!=='answered'&&m.status!=='superseded'&&m.status!=='host_rejected'&&(m.status==='host_resolved'||Boolean(m.dispatched_at))).filter(m=>!messages.some(r=>r.role==='assistant'&&r.kind==='final'&&r.event_id===m.event_id));
    const typingFor=awaiting.length?awaiting[awaiting.length-1].event_id:'';
-   const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor;
+   const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor+'|stale:'+(staleClaim?staleClaim.id:'');
   if(!force&&sig===liveChatSignature){
-   if(queueWarning)mark('liveComposeState',queueWarning);
+   if(queueWarning||claimWarning)mark('liveComposeState',queueWarning||claimWarning);
    return;
   }
   liveChatSignature=sig;
@@ -356,8 +358,11 @@ async function refreshConsecomChat(force=false){
       ' · '+Math.round((endTime-startTime)/1000)+'s desde envio':'';
    meta.append(dom('span',who),dom('span',stamp+(entry.role==='user'?' · '+(liveDeliveryNames[entry.status]||entry.status):elapsed)));
    row.append(msg,meta);
-   if(entry.role==='user'&&entry.status==='host_rejected'){
-    const retry=dom('button','Reenviar mensagem');retry.onclick=()=>retryConsecomMessage(entry.id);retry.style.marginTop='8px';row.append(retry);
+   const retryable=entry.role==='user'&&(entry.status==='host_rejected'||(entry.status==='claimed'&&!entry.dispatched_at&&entry.claimed_at&&Date.now()-Date.parse(entry.claimed_at)>=120000));
+   if(retryable){
+    const retry=dom('button',entry.status==='claimed'?'Verificar e reenviar':'Reenviar mensagem');
+    retry.onclick=()=>retryConsecomMessage(entry.id);
+    retry.style.marginTop='8px';row.append(retry);
    }
    fragment.append(row);
   }
@@ -396,7 +401,7 @@ async function refreshConsecomChat(force=false){
   liveChatBooted=true;
   const last=messages[messages.length-1];
   if(last){
-   if(queueWarning)mark('liveComposeState',queueWarning);
+   if(queueWarning||claimWarning)mark('liveComposeState',queueWarning||claimWarning);
    else if(typingFor)mark('liveComposeState','Mensagem encaminhada ao ChatGPT. Aguardando a resposta...');
    else if(last.role==='assistant'&&last.kind==='final')mark('liveComposeState','Resposta recebida do ChatGPT.');
    else if(last.role==='user')mark('liveComposeState',liveDeliveryNames[last.status]||'Aguardando ChatGPT...');
