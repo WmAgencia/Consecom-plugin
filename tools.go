@@ -235,6 +235,22 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.workflowCancel(id)
 	case "fluxo_historico":
 		return a.workflowListHistory()
+	case "dev_preview_iniciar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		var port int
+		if e=json.Unmarshal(args["porta"],&port);e!=nil{return nil,e}
+		return a.previewStart(id,port,false)
+	case "dev_preview_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.previewStatus(id)
+	case "dev_preview_listar":
+		return a.previewList()
+	case "dev_preview_parar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.previewStop(id)
+	case "dev_preview_verificar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.previewCheck(id)
 	case "dev_job_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
@@ -575,6 +591,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveDeveloper(p)
 	case "devjob":
 		return a.approveDevJob(p)
+	case "devpreview":
+		return a.previewApproved(p)
 	case "gitpatch":
 		return a.gitPatchApproved(p)
 	case "gitrollback":
