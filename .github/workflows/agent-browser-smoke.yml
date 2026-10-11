@@ -29,6 +29,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           $snapshot = agent-browser --session consecom-v46-ci --allowed-domains "example.com,*.example.com" snapshot
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          Write-Output ("SANITIZED_PUBLIC_SNAPSHOT=" + ($snapshot -join " | ").Substring(0,[Math]::Min(900,($snapshot -join " | ").Length)))
           if (-not (($snapshot -join " ") -match "Example Domain")) { throw "Snapshot nao encontrou Example Domain" }
           agent-browser --session consecom-v46-ci --allowed-domains "example.com,*.example.com" close
           if ($LASTEXITCODE -ne 0) { exit 1 }
