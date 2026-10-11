@@ -22,14 +22,20 @@ func TestLiveSingleMCPToolDiscoveryAndWidget(t *testing.T){
  a,e:=NewApp(filepath.Join(t.TempDir(),"config.json"));if e!=nil{t.Fatal(e)}
  listed:=liveTestRPC(t,a,"tools/list",map[string]any{})
  payload:=listed["result"].(map[string]any)
- list:=payload["tools"].([]Tool)
+ list:=payload["tools"].([]any)
  seen:=map[string]bool{}
- for _,tool:=range list{seen[tool.Name]=true}
+ for _,item:=range list{
+  switch tool:=item.(type){
+  case Tool:seen[tool.Name]=true
+  case LiveTool:seen[tool.Name]=true
+  }
+ }
  for _,name:=range []string{"diagnostico_pc","consecom_live_abrir","consecom_live_aguardar","consecom_live_status","consecom_live_ler_evento","consecom_live_reportar_host","consecom_live_resultados"}{
   if !seen[name]{t.Fatalf("missing existing or live tool %s",name)}
  }
- for _,tool:=range list{
-  if tool.Name=="consecom_live_abrir"{
+ for _,item:=range list{
+  tool,ok:=item.(LiveTool)
+  if ok&&tool.Name=="consecom_live_abrir"{
    if tool.Meta["openai/outputTemplate"]!=liveResourceURI{t.Fatalf("missing template metadata: %+v",tool.Meta)}
   }
  }
