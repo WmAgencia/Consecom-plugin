@@ -158,47 +158,45 @@ func validBrowserProfile(browser, profile string) bool {
 	}
 	return false
 }
+// A ChatGPT-owned browser uses an isolated, persistent Consecom profile.
+// Never migrate cookies or attach to the user's open personal Chrome.
+func preferredExclusiveBrowser() BrowserPreference {
+ if findBrowserExe("chrome")!="" {return BrowserPreference{Browser:"chrome",Profile:"managed:chatgpt"}}
+ if findBrowserExe("edge")!="" {return BrowserPreference{Browser:"edge",Profile:"managed:chatgpt"}}
+ return BrowserPreference{}
+}
+func exclusiveBrowserPreference(p BrowserPreference) BrowserPreference {
+ if p.Profile=="managed:chatgpt" && (p.Browser=="chrome"||p.Browser=="edge") && findBrowserExe(p.Browser)!="" {return p}
+ return preferredExclusiveBrowser()
+}
 func (a *App) getBrowserPreference() BrowserPreference {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.cfg.Browser
+ a.mu.Lock();p:=a.cfg.Browser;a.mu.Unlock()
+ return exclusiveBrowserPreference(p)
 }
 func (a *App) setBrowserPreference(b BrowserPreference) error {
-	if (b.Browser == "") != (b.Profile == "") {
-		return errors.New("selecione navegador e perfil, ou deixe os dois vazios para perguntar sempre")
-	}
-	if b.Browser != "" && !validBrowserProfile(b.Browser, b.Profile) {
-		return errors.New("navegador ou perfil indisponivel; atualize a lista")
-	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	old := a.cfg.Browser
-	a.cfg.Browser = b
-	if e := a.saveLocked(); e != nil {
-		a.cfg.Browser = old
-		return e
-	}
-	return nil
+ if b.Browser!="chrome"&&b.Browser!="edge" {return errors.New("escolha Chrome ou Microsoft Edge")}
+ if b.Profile!="" && b.Profile!="managed:chatgpt" {return errors.New("apenas o perfil exclusivo Consecom e permitido")}
+ b.Profile="managed:chatgpt"
+ if findBrowserExe(b.Browser)=="" {return errors.New("navegador nao instalado")}
+ a.mu.Lock();defer a.mu.Unlock()
+ old:=a.cfg.Browser;a.cfg.Browser=b
+ if e:=a.saveLocked();e!=nil {a.cfg.Browser=old;return e}
+ return nil
 }
 func (a *App) browserOptions() map[string]any {
-	p := a.getBrowserPreference()
-	return map[string]any{"default": p, "browsers": discoverBrowsers(), "requires_choice": p.Browser == "" || p.Profile == "", "note": "Perfis personal:* sao isolados. Chrome live:current anexa a sessao real JA ABERTA com autorizacao local do Chrome (144+), podendo usar logins existentes; nao copia arquivos de cookies nem senhas. Chrome pode exigir aprovacao presencial a cada nova conexao."}
+ p:=a.getBrowserPreference()
+ choices:=discoverBrowsers()
+ // Only expose the ChatGPT-exclusive profile in the Windows panel.
+ for i:=range choices {choices[i].Profiles=[]BrowserProfile{{ID:"managed:chatgpt",Name:"Consecom exclusivo",Kind:"managed",Notice:"Perfil independente do navegador pessoal; login feito somente nesta sessao."}}}
+ return map[string]any{"default":p,"browsers":choices,"requires_choice":p.Browser=="","note":"Sessao privada persistente de automacao. Escolha somente Chrome ou Edge; nao acessa seu perfil pessoal nem cookies."}
 }
-func (a *App) resolveBrowserChoice(browser, profile string) (string, string, error) {
-	pref := a.getBrowserPreference()
-	if browser == "" {
-		browser = pref.Browser
-	}
-	if profile == "" && browser == pref.Browser {
-		profile = pref.Profile
-	}
-	if browser == "" || profile == "" {
-		return "", "", errors.New("SELECAO_NECESSARIA: pergunte ao usuario qual navegador (Chrome ou Edge) e qual perfil deseja usar; use browser_opcoes para mostrar alternativas. Nao escolha por conta propria")
-	}
-	if !validBrowserProfile(browser, profile) {
-		return "", "", errors.New("navegador/perfil nao encontrado; use browser_opcoes e pergunte novamente")
-	}
-	return browser, profile, nil
+func (a *App) resolveBrowserChoice(browser, profile string) (string,string,error) {
+ pref:=a.getBrowserPreference()
+ if browser=="" {browser=pref.Browser}
+ if browser!="chrome"&&browser!="edge"{return "","",errors.New("instale Chrome ou Edge e escolha o navegador exclusivo do Consecom")}
+ if profile!=""&&profile!="managed:chatgpt" {return "","",errors.New("perfil pessoal nao disponivel; use a sessao exclusiva Consecom")}
+ if findBrowserExe(browser)=="" {return "","",errors.New("navegador selecionado nao instalado")}
+ return browser,"managed:chatgpt",nil
 }
 func browserURL(raw string) (string, error) {
 	u, e := url.Parse(raw)
