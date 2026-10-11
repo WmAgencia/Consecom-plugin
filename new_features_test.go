@@ -52,8 +52,8 @@ func TestMCPNewToolsAreValid(t *testing.T) {
 			t.Fatal("missing " + name)
 		}
 	}
-	if len(tools()) != 84 {
-		t.Fatalf("expected 84 tools got %d", len(tools()))
+	if len(tools()) != 89 {
+		t.Fatalf("expected 89 tools got %d", len(tools()))
 	}
 }
 func TestBrowserOwnedTabs(t *testing.T) {
