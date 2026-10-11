@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-const consecomVersion = "2.7.1"
+const consecomVersion = "2.7.2"
 // A única origem autorizada para instalar atualizações do Consecom Plugin.
 const officialUpdateRepo = "WmAgencia/Consecom-plugin"
 const updateMaxBytes int64 = 64 << 20
