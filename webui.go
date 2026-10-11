@@ -200,7 +200,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-info{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:9px;color:#8aa9ba;font-size:11px}
 .live-chat-status{white-space:pre-wrap;max-width:100%}
 @media(max-width:680px){.live-chat-stream{padding:13px;max-height:400px}.live-chat-row{max-width:92%}.live-chat-editor{align-items:stretch}.live-chat-editor textarea{width:100%}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.6 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.7 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><section class="consecom-onboarding" id="consecomOnboarding" aria-label="Ativar o Consecom nesta conversa">
 <div class="consecom-onboarding-head"><div>
 <strong>Ative o Consecom em uma conversa do ChatGPT</strong>
@@ -330,11 +330,13 @@ async function refreshConsecomChat(force=false){
      queueWarning='A mensagem está na fila há '+Math.round(age/1000)+'s. Reabra o Consecom Live no ChatGPT.';
     }
    }
+   const staleClaim=messages.find(m=>m.role==='user'&&m.status==='claimed'&&!m.dispatched_at&&m.claimed_at&&Date.now()-Date.parse(m.claimed_at)>=120000);
+   const claimWarning=staleClaim?'Mensagem '+staleClaim.id+' ficou sem confirmação de envio. Confira a conversa antes de reenviar.':'';
    const awaiting=messages.filter(m=>m.role==='user'&&m.status!=='answered'&&m.status!=='superseded'&&m.status!=='host_rejected'&&(m.status==='host_resolved'||Boolean(m.dispatched_at))).filter(m=>!messages.some(r=>r.role==='assistant'&&r.kind==='final'&&r.event_id===m.event_id));
    const typingFor=awaiting.length?awaiting[awaiting.length-1].event_id:'';
-   const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor;
+   const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor+'|stale:'+(staleClaim?staleClaim.id:'');
   if(!force&&sig===liveChatSignature){
-   if(queueWarning)mark('liveComposeState',queueWarning);
+   if(queueWarning||claimWarning)mark('liveComposeState',queueWarning||claimWarning);
    return;
   }
   liveChatSignature=sig;
@@ -356,8 +358,11 @@ async function refreshConsecomChat(force=false){
       ' · '+Math.round((endTime-startTime)/1000)+'s desde envio':'';
    meta.append(dom('span',who),dom('span',stamp+(entry.role==='user'?' · '+(liveDeliveryNames[entry.status]||entry.status):elapsed)));
    row.append(msg,meta);
-   if(entry.role==='user'&&entry.status==='host_rejected'){
-    const retry=dom('button','Reenviar mensagem');retry.onclick=()=>retryConsecomMessage(entry.id);retry.style.marginTop='8px';row.append(retry);
+   const retryable=entry.role==='user'&&(entry.status==='host_rejected'||(entry.status==='claimed'&&!entry.dispatched_at&&entry.claimed_at&&Date.now()-Date.parse(entry.claimed_at)>=120000));
+   if(retryable){
+    const retry=dom('button',entry.status==='claimed'?'Verificar e reenviar':'Reenviar mensagem');
+    retry.onclick=()=>retryConsecomMessage(entry.id);
+    retry.style.marginTop='8px';row.append(retry);
    }
    fragment.append(row);
   }
@@ -396,7 +401,7 @@ async function refreshConsecomChat(force=false){
   liveChatBooted=true;
   const last=messages[messages.length-1];
   if(last){
-   if(queueWarning)mark('liveComposeState',queueWarning);
+   if(queueWarning||claimWarning)mark('liveComposeState',queueWarning||claimWarning);
    else if(typingFor)mark('liveComposeState','Mensagem encaminhada ao ChatGPT. Aguardando a resposta...');
    else if(last.role==='assistant'&&last.kind==='final')mark('liveComposeState','Resposta recebida do ChatGPT.');
    else if(last.role==='user')mark('liveComposeState',liveDeliveryNames[last.status]||'Aguardando ChatGPT...');
