@@ -275,6 +275,7 @@ async function copyConsecomSetupPrompt(){
   if(navigator.clipboard&&navigator.clipboard.writeText){
    await navigator.clipboard.writeText(prompt);
   }else{
+   field.closest('details').open=true;
    field.focus();field.select();
    if(!document.execCommand('copy'))throw Error('Cópia não autorizada');
   }
