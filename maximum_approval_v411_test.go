@@ -3,6 +3,7 @@ package main
 import (
  "os"
  "os/exec"
+ "runtime"
  "path/filepath"
  "strings"
  "testing"
@@ -29,8 +30,8 @@ func TestMaximumPolicyReportedViaMCP(t *testing.T) {
 }
 
 func TestMaximumLegacyNPMExecutionDoesNotQueue(t *testing.T) {
- if _,err:=exec.LookPath("node");err!=nil{t.Skip("Node unavailable on this runner")}
- if _,err:=exec.LookPath("npm");err!=nil{t.Skip("npm unavailable on this runner")}
+ if _,err:=exec.LookPath("node");err!=nil{if runtime.GOOS=="windows"{t.Fatalf("node is required for Windows approval integration test: %v",err)};t.Skip("node unavailable on non-Windows runner")}
+ if _,err:=exec.LookPath("npm");err!=nil{if runtime.GOOS=="windows"{t.Fatalf("npm is required for Windows approval integration test: %v",err)};t.Skip("npm unavailable on non-Windows runner")}
  a,err:=NewApp(filepath.Join(t.TempDir(),"config.json"));if err!=nil{t.Fatal(err)}
  rootPath:=filepath.Join(t.TempDir(),"developer")
  if err=os.MkdirAll(rootPath,0700);err!=nil{t.Fatal(err)}
