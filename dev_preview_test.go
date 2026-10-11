@@ -2,7 +2,6 @@ package main
 
 import (
  "encoding/json"
- "errors"
  "net"
  "os"
  "os/exec"
@@ -81,7 +80,7 @@ func TestPreviewFrameworkRestrictions(t *testing.T){
  if _,err:=a.previewStart(rootID,port,false);err==nil{t.Fatal("missing manifest accepted")}
  if err:=a.setWritable(rootID,false);err!=nil{t.Fatal(err)}
  if _,err:=a.previewStart(rootID,port,false);err==nil{t.Fatal("read-only project executed scripts")}
- if _,err:=a.previewStatus("missing");!errors.Is(err,nil)&&err==nil{t.Fatal("invalid id")}
+ if _,err:=a.previewStatus("missing");err==nil{t.Fatal("invalid id accepted")}
 }
 
 func TestPreviewToolSchema(t *testing.T){
