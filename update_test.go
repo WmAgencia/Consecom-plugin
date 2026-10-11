@@ -16,11 +16,11 @@ import (
 )
 
 func TestUpdateManifestAllowsOnlyPinnedGitHubRepository(t *testing.T) {
-	m := UpdateManifest{Version: "4.5.1", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.5.1/Instalar_Consecom_MCP_v2_6_1.exe", SHA256: strings.Repeat("a", 64)}
+	m := UpdateManifest{Version: "4.6.1", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.6.1/Instalar_Consecom_MCP_v2_6_1.exe", SHA256: strings.Repeat("a", 64)}
 	if e := validateUpdateManifest(officialUpdateRepo, m); e != nil {
 		t.Fatal(e)
 	}
-	bad := []string{"http://github.com/wmagencia/consecom-mcp/releases/download/v4.5.1/update.exe", "https://attacker.com/installer.exe", "https://github.com/evil/evil/releases/download/v4.5.1/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.9.9/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.5.1/a.zip", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.5.1/x.exe?redirect=hack"}
+	bad := []string{"http://github.com/wmagencia/consecom-mcp/releases/download/v4.6.1/update.exe", "https://attacker.com/installer.exe", "https://github.com/evil/evil/releases/download/v4.6.1/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v2.9.9/installer.exe", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.6.1/a.zip", "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.6.1/x.exe?redirect=hack"}
 	for _, u := range bad {
 		c := m
 		c.URL = u
@@ -89,7 +89,7 @@ func TestUpdateSemver(t *testing.T) {
 	cases := []struct {
 		a, b string
 		want int
-	}{{"4.5.1", "2.5.0", 1}, {"2.5.0", "2.5.0", 0}, {"2.4.9", "2.5.0", -1}, {"2.10.0", "2.9.99", 1}}
+	}{{"4.6.1", "2.5.0", 1}, {"2.5.0", "2.5.0", 0}, {"2.4.9", "2.5.0", -1}, {"2.10.0", "2.9.99", 1}}
 	for _, c := range cases {
 		v, e := compareSemver(c.a, c.b)
 		if e != nil || v != c.want {
@@ -123,7 +123,7 @@ func TestUpdaterStagesVerifiedReleaseAndQueuesApproval(t *testing.T) {
 	hash := sha256.Sum256(payload)
 	sha := hex.EncodeToString(hash[:])
 	repo := officialUpdateRepo
-	manifest := UpdateManifest{Version: "4.5.1", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.5.1/Instalar_Consecom_2_6_1.exe", SHA256: sha}
+	manifest := UpdateManifest{Version: "4.6.1", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.6.1/Instalar_Consecom_2_6_1.exe", SHA256: sha}
 	mb, _ := json.Marshal(manifest)
 	old := updateHTTPClient
 	updateHTTPClient = &http.Client{Timeout: 5 * time.Second, Transport: updateRoundTripper(func(r *http.Request) (*http.Response, error) {
