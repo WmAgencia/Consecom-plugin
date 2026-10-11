@@ -28,11 +28,13 @@ var startAppIDPattern = regexp.MustCompile(`^[A-Za-z0-9._!{}+\-]{1,260}$`)
 // The script is fixed: no user query, app name or path becomes PowerShell code.
 const startAppsScript = `
 $ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
+$WarningPreference='SilentlyContinue'
 $apps=@(Get-StartApps | Select-Object -First 600)
 $out=@(foreach($app in $apps){
  [pscustomobject]@{name=[string]$app.Name;app_id=[string]$app.AppID}
 })
-ConvertTo-Json -InputObject $out -Compress -Depth 3
+Write-Output ('CONSECOM_STARTAPPS_JSON='+ (ConvertTo-Json -InputObject $out -Compress -Depth 3))
 `
 
 func enumerateWindowsApps() ([]InstalledWindowsApp,error) {
@@ -40,8 +42,17 @@ func enumerateWindowsApps() ([]InstalledWindowsApp,error) {
  defer cancel()
  out,err:=uiaPowerShell(ctx,startAppsScript)
  if err!=nil{return nil,fmt.Errorf("nao foi possivel consultar o menu Iniciar do Windows: %w",err)}
+ jsonLine:=""
+ for _,line:=range strings.Split(strings.ReplaceAll(string(out),"\r\n","\n"),"\n") {
+  line=strings.TrimSpace(line)
+  if strings.HasPrefix(line,"CONSECOM_STARTAPPS_JSON="){
+   jsonLine=strings.TrimPrefix(line,"CONSECOM_STARTAPPS_JSON=")
+   break
+  }
+ }
+ if jsonLine==""{return nil,fmt.Errorf("a consulta ao menu Iniciar nao retornou JSON valido: %s",clip(strings.TrimSpace(string(out)),220))}
  var apps []InstalledWindowsApp
- if err=json.Unmarshal(out,&apps);err!=nil{return nil,fmt.Errorf("resposta invalida da lista de aplicativos: %w",err)}
+ if err=json.Unmarshal([]byte(jsonLine),&apps);err!=nil{return nil,fmt.Errorf("JSON do menu Iniciar invalido: %w",err)}
  unique:=map[string]bool{}
  clean:=make([]InstalledWindowsApp,0,len(apps))
  for _,app:=range apps{
