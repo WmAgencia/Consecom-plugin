@@ -111,7 +111,8 @@ func (a *App) contextIntegrations()(any,error){
   out=append(out,IntegrationStatus{ID:item.ID,Label:item.Label,Detected:detected,Supported:supported,Configured:cfg,Observed:observed,Ready:ready,WorkspaceHint:hint,Detail:detail})
  }
  return map[string]any{"integrations":out,"search":"PATH, locais oficiais, menu Iniciar e nomes de pastas em C:/D: com busca limitada"},nil
-}func (a *App) contextMarkConfigured(id string)error{
+}
+func (a *App) contextMarkConfigured(id string)error{
  a.mu.Lock();defer a.mu.Unlock()
  if a.cfg.ContextConnections==nil{a.cfg.ContextConnections=map[string]bool{}}
  before:=a.cfg.ContextConnections[id]
@@ -131,7 +132,8 @@ func contextRunMCPWithCLI(cli contextCLIInfo,args ...string)error{
   return fmt.Errorf("CLI nao configurou o MCP: %s",clip(strings.TrimSpace(string(output)),320))
  }
  return nil
-}func (a *App) contextConnectIntegration(id string)(any,error){
+}
+func (a *App) contextConnectIntegration(id string)(any,error){
  switch id {
  case "obsidian":
   return a.contextVaultAuto()
