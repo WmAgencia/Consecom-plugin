@@ -86,6 +86,11 @@ func tools() []Tool {
 		{"desktop_digitar","Solicitar aprovacao local para digitar texto em janela visivel nao protegida.",schema(map[string]any{"window":str("ID da janela"),"texto":str("Texto de ate 1000 caracteres")},"window","texto"),mutating},
 		{"desktop_capturar","Solicitar aprovacao local para capturar janela selecionada.",schema(map[string]any{"window":str("ID da janela")},"window"),mutating},
 		{"desktop_ultima_captura","Ler captura de janela explicitamente aprovada nos ultimos cinco minutos.",schema(map[string]any{}),readonly},
+		{"browser_habilitar_downloads","Permitir downloads apenas na pasta privada do Consecom; exige navegador controlado.",schema(map[string]any{}),mutating},
+		{"browser_downloads","Listar downloads concluídos da pasta privada sem ler seus conteudos.",schema(map[string]any{}),readonly},
+		{"browser_upload_arquivo","Solicitar aprovacao local para selecionar arquivo autorizado em campo de upload do site; nao envia formulario.",schema(map[string]any{"root_id":str("ID da pasta"),"caminho":str("Arquivo relativo"),"seletor":str("Seletor CSS do input[type=file]")},"root_id","caminho","seletor"),mutating},
+		{"browser_confirmar_acao","Solicitar aprovacao local para clique que envia, publica ou exclui no site.",schema(map[string]any{"seletor":str("Seletor CSS do botao")},"seletor"),mutating},
+		{"browser_download_copiar","Solicitar aprovacao local para copiar download privado ao projeto, sem sobrescrever.",schema(map[string]any{"nome":str("Nome do download"),"root_id":str("ID da pasta"),"destino":str("Destino relativo")},"nome","root_id","destino"),mutating},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -143,6 +148,23 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		case "desktop_digitar": return a.desktopRequest("type",item)
 		default: return a.desktopRequest("capture",item)
 		}
+	case "browser_habilitar_downloads":
+		return a.browserEnableDownloads()
+	case "browser_downloads":
+		return a.browserDownloads()
+	case "browser_upload_arquivo":
+		root,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		selector,e:=argStr(args,"seletor");if e!=nil{return nil,e}
+		return a.browserUploadRequest(root,path,selector)
+	case "browser_confirmar_acao":
+		selector,e:=argStr(args,"seletor");if e!=nil{return nil,e}
+		return a.browserSensitiveRequest(selector)
+	case "browser_download_copiar":
+		name,e:=argStr(args,"nome");if e!=nil{return nil,e}
+		root,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"destino");if e!=nil{return nil,e}
+		return a.browserDownloadCopyRequest(name,root,path)
 	case "dev_execucao":
 		rootID, e := argStr(args, "root_id")
 		if e != nil {
@@ -428,6 +450,10 @@ func (a *App) approve(id string) (string, error) {
 		return a.gitBranchApproved(p)
 	case "desktop":
 		return a.approveDesktop(p)
+	case "browserupload","browserconfirm":
+		return a.approveBrowserTransfer(p)
+	case "browsercopy":
+		return a.approveBrowserCopy(p)
 	case "close":
 		errs := []string{}
 		for _, t := range p.Processes {
