@@ -42,7 +42,7 @@ func contextHasBadControl(s string)bool{
 
 func contextName(name string)(string,error){
  name=strings.TrimSpace(name)
- if name==""||len([]rune(name))>90||contextHasBadControl(name)||strings.ContainsAny(name,string(rune(10))+string(rune(13)))){
+ if name==""||len([]rune(name))>90||contextHasBadControl(name)||strings.ContainsAny(name,string(rune(10))+string(rune(13))){
   return "",errors.New("titulo ou fonte vazia, longa ou com caracteres de controle")
  }
  return name,nil
