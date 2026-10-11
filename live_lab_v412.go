@@ -82,16 +82,10 @@ func (b *LiveLab) saveLocked(seq uint64,events []LiveEvent)error{
 }
 func (b *LiveLab) emitSynthetic()(LiveEvent,error){
  b.mu.Lock();defer b.mu.Unlock()
- seq:=b.seq+1
- ev:=LiveEvent{ID:fmt.Sprintf("evt-%06d",seq),Sequence:seq,Kind:"BUILD_FAILED",
+ return b.appendEventLocked(LiveEvent{
+  Kind:"BUILD_FAILED",
   Message:"ERRO SINTETICO: modulo de demonstracao nao encontrado. Nenhum arquivo foi alterado.",
-  CreatedAt:time.Now().UTC().Format(time.RFC3339Nano)}
- next:=append(append([]LiveEvent(nil),b.events...),ev)
- if len(next)>liveMaxEvents{next=next[len(next)-liveMaxEvents:]}
- if err:=b.saveLocked(seq,next);err!=nil{return LiveEvent{},err}
- b.seq=seq;b.events=next
- close(b.notify);b.notify=make(chan struct{})
- return ev,nil
+ })
 }
 func (b *LiveLab) launch(){
  b.mu.Lock()
