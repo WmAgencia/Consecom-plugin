@@ -4,7 +4,6 @@ import (
  "context"
  "encoding/json"
  "errors"
- "fmt"
  "os"
  "path/filepath"
  "regexp"
@@ -15,7 +14,7 @@ import (
 
 // Consecom Live LAB is intentionally restricted to synthetic events.
 // No actual PC error, credentials, files or conversation data enter the lab.
-const liveResourceURI="ui://consecom/live/v1.html"
+const liveResourceURI="ui://consecom/live/v2.html"
 const liveMaxEvents=50
 const liveMaxWait=12*time.Second
 var liveEventPattern=regexp.MustCompile("^evt-[0-9]{6}$")
@@ -26,6 +25,8 @@ type LiveEvent struct {
  Kind string `json:"kind"`
  Message string `json:"message"`
  CreatedAt string `json:"created_at"`
+ Delivery string `json:"delivery,omitempty"`
+ ClaimedAt string `json:"claimed_at,omitempty"`
 }
 type LiveHostReport struct {
  ID string `json:"id"`
@@ -48,6 +49,7 @@ type LiveLab struct {
  notify chan struct{}
  running bool
  until time.Time
+ lastPanelSent time.Time
 }
 func newLiveLab(path string)(*LiveLab,error){
  b:=&LiveLab{journal:path,notify:make(chan struct{})}
@@ -79,16 +81,10 @@ func (b *LiveLab) saveLocked(seq uint64,events []LiveEvent)error{
 }
 func (b *LiveLab) emitSynthetic()(LiveEvent,error){
  b.mu.Lock();defer b.mu.Unlock()
- seq:=b.seq+1
- ev:=LiveEvent{ID:fmt.Sprintf("evt-%06d",seq),Sequence:seq,Kind:"BUILD_FAILED",
+ return b.appendEventLocked(LiveEvent{
+  Kind:"BUILD_FAILED",
   Message:"ERRO SINTETICO: modulo de demonstracao nao encontrado. Nenhum arquivo foi alterado.",
-  CreatedAt:time.Now().UTC().Format(time.RFC3339Nano)}
- next:=append(append([]LiveEvent(nil),b.events...),ev)
- if len(next)>liveMaxEvents{next=next[len(next)-liveMaxEvents:]}
- if err:=b.saveLocked(seq,next);err!=nil{return LiveEvent{},err}
- b.seq=seq;b.events=next
- close(b.notify);b.notify=make(chan struct{})
- return ev,nil
+ })
 }
 func (b *LiveLab) launch(){
  b.mu.Lock()
@@ -160,8 +156,27 @@ func (b *LiveLab) report(id,mode,status string)error{
  case "attempt","host_rejected","host_resolved","unavailable","pending":
  default:return errors.New("invalid host status")
  }
- if _,ok:=b.get(id);!ok{return errors.New("unknown synthetic event")}
  b.mu.Lock();defer b.mu.Unlock()
+ found:=false
+ for i,ev:=range b.events {
+  if ev.ID!=id {continue}
+  found=true
+  if ev.Kind=="PANEL_MESSAGE" && ev.Delivery=="claimed" {
+   next:=ev
+   switch status {
+   case "host_resolved": next.Delivery="host_resolved"
+   case "host_rejected","unavailable": next.Delivery="host_rejected"
+   }
+   if next.Delivery!=ev.Delivery {
+    updated:=append([]LiveEvent(nil),b.events...)
+    updated[i]=next
+    if err:=b.saveLocked(b.seq,updated);err!=nil{return err}
+    b.events=updated
+   }
+  }
+  break
+ }
+ if !found{return errors.New("unknown event")}
  b.reports=append(b.reports,LiveHostReport{ID:id,Mode:mode,Status:status,
   Detail:"Host outcome only; no proof of new ChatGPT model turn.",
   CreatedAt:time.Now().UTC().Format(time.RFC3339Nano)})
@@ -186,20 +201,22 @@ func liveToolSpecs()[]LiveTool{
  readonly:=map[string]any{"readOnlyHint":true,"openWorldHint":false}
  obs:=map[string]any{"readOnlyHint":false,"destructiveHint":false,"openWorldHint":false}
  base:=[]LiveTool{
-  {Name:"consecom_live_abrir",Description:"Abrir Consecom Live LAB no MESMO Consecom MCP conectado. Exibe eventos sinteticos e testa tentativa automatica de nova mensagem sem clique. Nenhum comando real e executado.",InputSchema:schema(map[string]any{}),Annotations:readonly,
+  {Name:"consecom_live_abrir",Description:"Abrir ponte de mensagens do painel Consecom no MESMO MCP conectado. Mantenha o widget visivel no ChatGPT para receber mensagens. Opcao modo=teste reativa os erros sinteticos. Nao executa comandos.",InputSchema:schema(map[string]any{"modo":map[string]any{"type":"string","enum":[]string{"mensagens","teste"}}}),Annotations:readonly,
    Meta:map[string]any{"ui":map[string]any{"resourceUri":liveResourceURI},"openai/outputTemplate":liveResourceURI}},
-  {Name:"consecom_live_status",Description:"Consultar eventos SINTETICOS do Consecom Live LAB sem acessar arquivos do PC.",InputSchema:schema(map[string]any{
+  {Name:"consecom_live_status",Description:"Consultar eventos do Consecom Live; inclui mensagens escritas manualmente no painel local.",InputSchema:schema(map[string]any{
    "after_sequence":map[string]any{"type":"integer","minimum":0}},),Annotations:readonly,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"model","app"}},"openai/widgetAccessible":true}},
-  {Name:"consecom_live_aguardar",Description:"Aguarda ate 12s por evento sintetico numa chamada MCP ativa. Nao acorda ChatGPT depois do turno.",InputSchema:schema(map[string]any{
+  {Name:"consecom_live_aguardar",Description:"Aguarda ate 12s por evento do Consecom, inclusive mensagens do painel, em uma chamada MCP ativa.",InputSchema:schema(map[string]any{
    "after_sequence":map[string]any{"type":"integer","minimum":0},
    "wait_ms":map[string]any{"type":"integer","minimum":0,"maximum":12000}},"after_sequence"),Annotations:readonly,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"model","app"}},"openai/widgetAccessible":true}},
-  {Name:"consecom_live_ler_evento",Description:"Ler evento demonstrativo pelo ID. Nenhuma leitura de logs reais do Windows.",InputSchema:schema(map[string]any{"id":str("evt-000001")},"id"),Annotations:readonly},
+  {Name:"consecom_live_ler_evento",Description:"Ler evento recebido, inclusive uma mensagem digitada no painel Consecom. Nao executa comandos.",InputSchema:schema(map[string]any{"id":str("evt-000001")},"id"),Annotations:readonly},
   {Name:"consecom_live_reportar_host",Description:"Registrar resultado da tentativa do widget no host. Nao confirma se o modelo acordou.",InputSchema:schema(map[string]any{
    "id":str("ID do evento sintetico"),
    "mode":map[string]any{"type":"string","enum":[]string{"auto","manual"}},
    "status":map[string]any{"type":"string","enum":[]string{"attempt","host_rejected","host_resolved","unavailable","pending"}}},"id","mode","status"),Annotations:obs,
+   Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
+  {Name:"consecom_live_assumir_mensagem",Description:"Reivindicar atomicamente uma mensagem manual do painel para impedir envio duplicado por widgets simultaneos.",InputSchema:schema(map[string]any{"id":str("ID de mensagem evt-000001")},"id"),Annotations:obs,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
   {Name:"consecom_live_resultados",Description:"Consultar tentativas feitas pelo componente Live LAB e seu retorno sem dados privados.",InputSchema:schema(map[string]any{}),Annotations:readonly},
  }
@@ -227,7 +244,10 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
  var v any
  switch name{
  case "consecom_live_abrir":
-  a.live.launch()
+  modo:="mensagens"
+  if len(m["modo"])>0 {if err=json.Unmarshal(m["modo"],&modo);err!=nil{return nil,errors.New("modo invalido")}}
+  if modo!="mensagens"&&modo!="teste"{return nil,errors.New("modo invalido")}
+  if modo=="teste"{a.live.launch()}
   v=a.live.snapshot(0)
  case "consecom_live_status":
   seq,err:=liveArgSeq(m,"after_sequence");if err!=nil{return nil,err}
@@ -239,6 +259,10 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
    if err=json.Unmarshal(m["wait_ms"],&ms);err!=nil||ms<0||ms>12000{return nil,errors.New("invalid wait_ms")}
   }
   v=a.live.wait(ctx,seq,ms)
+ case "consecom_live_assumir_mensagem":
+  key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
+  claimed,err:=a.live.claimPanelMessage(key);if err!=nil{return nil,err}
+  v=map[string]any{"claimed":claimed,"id":key}
  case "consecom_live_ler_evento":
   key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
   ev,ok:=a.live.get(key);if !ok{return nil,errors.New("evento sintetico nao encontrado")}

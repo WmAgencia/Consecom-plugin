@@ -169,6 +169,26 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		power, _ := a.boosterStatus()
 		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
+    case "/api/live/send":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{Message string `json:"message"`}
+        if !decode(w,r,&p){return}
+        if a.live==nil{respond(w,nil,errors.New("fila Consecom Live indisponivel"));return}
+        ev,err:=a.live.enqueuePanelMessage(p.Message)
+        if err!=nil{respond(w,nil,err);return}
+        respond(w,map[string]any{"id":ev.ID,"delivery":ev.Delivery,"created_at":ev.CreatedAt},nil)
+    case "/api/live/messages":
+        if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
+        if a.live==nil{respond(w,nil,errors.New("fila Consecom Live indisponivel"));return}
+        respond(w,a.live.panelOutbox(),nil)
+    case "/api/live/retry":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{ID string `json:"id"`}
+        if !decode(w,r,&p){return}
+        if a.live==nil{respond(w,nil,errors.New("fila Consecom Live indisponivel"));return}
+        ev,err:=a.live.retryPanelMessage(p.ID)
+        if err!=nil{respond(w,nil,err);return}
+        respond(w,map[string]any{"id":ev.ID,"delivery":ev.Delivery,"created_at":ev.CreatedAt},nil)
 	case "/api/browser/options":
 		content(w, a.browserOptions())
 	case "/api/browser/default":
