@@ -23,8 +23,19 @@ article{border-top:1px solid #2c4252;padding:9px 0}article strong{font-size:12px
 (function(){
 "use strict";
 const box=document.getElementById("events"),status=document.getElementById("status"),automatic=document.getElementById("auto");
-const seen=new Set();let cursor=0,active=true,attempts=0,failures=0,fastPathAvailable=true;
-const started=Date.now(),MAX_ATTEMPTS=50;
+const seen=new Set();let cursor=0,active=true,polling=false,failures=0,fastPathAvailable=true;
+const started=Date.now();
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// ChatGPT can remount a widget on the next turn. Persist only UI preferences,
+// not the queue cursor: a fresh widget must scan pending items from the start.
+const saved=window.openai&&window.openai.widgetState;
+if(saved&&typeof saved.automatic==="boolean")automatic.checked=saved.automatic;
+automatic.addEventListener("change",function(){
+ const host=window.openai;
+ if(host&&typeof host.setWidgetState==="function"){
+  try{host.setWidgetState({automatic:automatic.checked})}catch(_){}
+ }
+});
 function notice(s){status.textContent=s}
 function extract(response){
  if(!response)return null;
@@ -40,11 +51,9 @@ function observe(ev,mode,result,observedAt){
 }
 function ask(ev,manual,approvedBatch=false){
  if(!ev||!/^evt-[0-9]{6}$/.test(ev.id))return;
- if(attempts>=MAX_ATTEMPTS){notice("Limite de envios nesta sessão. Reabra o componente.");return}
  if(!manual&&!approvedBatch&&!automatic.checked)return;
  const fn=window.openai&&window.openai.sendFollowUpMessage,mode=manual?"manual":"auto";
  if(typeof fn!=="function"){notice("Host não disponibilizou o envio de mensagens.");observe(ev,mode,"unavailable");return}
- attempts++;
  let prompt;
  if(ev.kind==="PANEL_MESSAGE"){
   prompt="Mensagem do usuário enviada pelo chat Consecom. ID: "+ev.id+"\n\n"+
@@ -77,7 +86,6 @@ function ask(ev,manual,approvedBatch=false){
 }
 async function claimAndSend(ev,manual){
  if(!manual&&!automatic.checked)return;
- if(attempts>=MAX_ATTEMPTS)return;
  const api=window.openai&&window.openai.callTool;
  if(typeof api!=="function"){notice("Ponte de ferramentas indisponível.");return}
  // Transient MCP reinitialization must not strand a message as queued forever.
@@ -98,7 +106,7 @@ async function claimAndSend(ev,manual){
    }
    const retryMs=300*Math.pow(2,retry);
    notice("MCP reconectando; nova tentativa em "+retryMs+"ms...");
-   await new Promise(resolve=>setTimeout(resolve,retryMs));
+   await delay(retryMs);
   }
  }
 }
@@ -126,50 +134,63 @@ async function show(ev,ownedClaim=false){
  }else if(Date.parse(ev.created_at)>=started-1000){ask(ev,false)}
 }
 async function poll(){
- const api=window.openai&&window.openai.callTool;
- if(typeof api!=="function"){notice("ChatGPT não disponibilizou a ponte MCP do componente.");return}
- notice("Aguardando mensagens do painel Consecom...");
- while(active){
-  try{
-   // The dedicated MCP tool combines waiting + atomic claim in one trip.
-   // Avoid starting a second long poll while a legacy claim is pending:
-   // a serialized MCP host could otherwise delay dispatch by 8+ seconds.
-   const useFast=automatic.checked&&fastPathAvailable;
-   const tool=useFast?"consecom_live_aguardar_e_assumir":"consecom_live_aguardar";
-   let reply;
+ if(polling||!active)return;
+ polling=true;
+ try{
+  notice("Aguardando mensagens do painel Consecom...");
+  while(active){
    try{
-    reply=await api(tool,{after_sequence:cursor,wait_ms:useFast?5000:6000});
-    if(reply&&reply.isError)throw new Error(JSON.stringify(reply).slice(0,250));
-   }catch(err){
-    if(useFast&&/unknown tool|not found|unrecognized|not registered|invalid tool|unsupported/i.test(String(err&&err.message||err))){
-     fastPathAvailable=false;
-     notice("Modo compatível ativo: atualize o plugin para o envio rápido.");
+    // A temporarily missing bridge must not stop listening permanently.
+    const api=window.openai&&window.openai.callTool;
+    if(typeof api!=="function"){
+     notice("Ponte MCP indisponível; tentando reconectar automaticamente...");
+     await delay(1200);
      continue;
     }
-    throw err;
-   }
-   const result=extract(reply);
-   failures=0;
-   if(result){
-    const events=Array.isArray(result.events)?result.events:[];
-    const owned=new Set(Array.isArray(result.claimed_ids)?result.claimed_ids:[]);
-    for(const ev of events){
-     // Wait for any legacy claim before reopening a long poll.
-     await show(ev,owned.has(ev.id));
-     cursor=Math.max(cursor,Number(ev.sequence)||0);
+    // Keep one long poll at a time, including the legacy claim fallback.
+    const useFast=automatic.checked&&fastPathAvailable;
+    const tool=useFast?"consecom_live_aguardar_e_assumir":"consecom_live_aguardar";
+    let reply;
+    try{
+     reply=await api(tool,{after_sequence:cursor,wait_ms:useFast?5000:6000});
+     if(reply&&reply.isError)throw new Error(JSON.stringify(reply).slice(0,250));
+    }catch(err){
+     if(useFast&&/unknown tool|not found|unrecognized|not registered|invalid tool|unsupported/i.test(String(err&&err.message||err))){
+      fastPathAvailable=false;
+      notice("Modo compatível ativo. Atualize o plugin se necessário.");
+      continue;
+     }
+     throw err;
     }
-    if(result.gap)notice("Alguns eventos antigos saíram do histórico. Confira a fila no painel.");
-    if(result.sequence!==undefined&&!events.length)cursor=Math.max(cursor,Number(result.sequence)||0);
+    if(!active)break;
+    const result=extract(reply);
+    failures=0;
+    if(result){
+     const events=Array.isArray(result.events)?result.events:[];
+     const owned=new Set(Array.isArray(result.claimed_ids)?result.claimed_ids:[]);
+     for(const ev of events){
+      if(!active)break;
+      await show(ev,owned.has(ev.id));
+      cursor=Math.max(cursor,Number(ev.sequence)||0);
+     }
+     if(result.gap)notice("Alguns eventos antigos saíram do histórico. Confira a fila no painel.");
+     if(result.sequence!==undefined&&!events.length)cursor=Math.max(cursor,Number(result.sequence)||0);
+    }
+   }catch(err){
+    if(!active)break;
+    notice("MCP indisponível, tentando reconectar: "+String(err&&err.message||err).slice(0,110));
+    failures=Math.min(failures+1,5);
+    await delay(Math.min(4000,400*Math.pow(2,failures-1)));
    }
-  }catch(err){
-   notice("Reconectando ao MCP: "+String(err&&err.message||err).slice(0,135));
-   failures=Math.min(failures+1,5);
-   const retryMs=Math.min(2500,400*Math.pow(2,failures-1));
-   await new Promise(resolve=>setTimeout(resolve,retryMs));
   }
+ }finally{
+  polling=false;
+  if(active)void poll();
  }
 }
-window.addEventListener("pagehide",function(){active=false},{once:true});
+window.addEventListener("pagehide",function(){active=false});
+window.addEventListener("pageshow",function(){active=true;void poll()});
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&active)void poll()});
 void poll();
 })();
 </script></body></html>`
