@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feat/consecom-live-poc-mcp-sse
+      - feat/consecom-live-reverse-wait-lab
   pull_request:
     paths:
       - experiments/consecom-live-poc/**
@@ -21,7 +22,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Test live POC
+      - name: Test live and reverse-event POC
+        run: go test -race -v ./experiments/consecom-live-poc
+        if: matrix.os == 'ubuntu-latest'
+      - name: Windows Go tests
+        if: matrix.os == 'windows-latest'
         run: go test -v ./experiments/consecom-live-poc
       - name: Build Windows preview executable
         if: matrix.os == 'windows-latest'

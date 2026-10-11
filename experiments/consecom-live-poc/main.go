@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -36,26 +37,14 @@ type broker struct {
 	seq       uint64
 	events    []event
 	listeners map[chan event]struct{}
+	notify chan struct{}
+	journal string
+    observations []hostObservation
 }
 
-func newBroker() *broker { return &broker{listeners: make(map[chan event]struct{})} }
-func (b *broker) emit() event {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.seq++
-	ev := event{ID: fmt.Sprintf("evt-%06d", b.seq), Sequence: b.seq, Kind: "BUILD_FAILED", Message: "Erro de build de demonstracao: modulo ficticio ausente", CreatedAt: time.Now().UTC().Format(time.RFC3339)}
-	b.events = append(b.events, ev)
-	if len(b.events) > maxEvents {
-		b.events = b.events[len(b.events)-maxEvents:]
-	}
-	for ch := range b.listeners {
-		select {
-		case ch <- ev:
-		default:
-		}
-	}
-	return ev
-}
+func newBroker() *broker { return &broker{listeners:make(map[chan event]struct{}),notify:make(chan struct{})} }
+// Direct emission is retained only for in-memory fixture tests.
+func (b *broker) emit() event {ev,_:=b.emitWithError();return ev}
 func (b *broker) get(id string) (event, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -148,13 +137,24 @@ func (a *app) tools() []map[string]any {
 	return []map[string]any{
 		toolSpec("consecom_live_abrir", "Exibe um painel de eventos exclusivamente simulados do Consecom Live. Nao executa comandos no PC.", map[string]any{}, nil, true),
 		toolSpec("consecom_live_ler_evento", "Le dados de um evento sintético previamente emitido.", map[string]any{"id": map[string]any{"type": "string"}}, []string{"id"}, false),
+        toolSpec("consecom_live_aguardar_evento", "Aguarda ate 12 segundos por um evento sintetico, dentro da chamada MCP ja iniciada pelo ChatGPT. NAO inicia outra conversa.", map[string]any{"after_sequence":map[string]any{"type":"integer","minimum":0},"wait_ms":map[string]any{"type":"integer","minimum":0,"maximum":12000}},[]string{"after_sequence"},false),
+        toolSpec("consecom_live_estado_fila", "Exibe apenas sequencia e quantidade de eventos sinteticos persistidos.",map[string]any{},nil,false),
 	}
 }
-func (a *app) callTool(name string, args json.RawMessage) (any, error) {
+func (a *app) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
 	switch name {
 	case "consecom_live_abrir":
 		v := map[string]any{"status": "demo", "recent": a.broker.count(), "note": "Apenas eventos simulados"}
 		return map[string]any{"structuredContent": v, "content": []any{map[string]any{"type": "text", "text": "Painel Consecom Live de demonstracao. Os eventos sao simulados."}}}, nil
+    case "consecom_live_estado_fila":
+        v:=a.broker.journalState()
+        return map[string]any{"structuredContent":v,"content":[]any{map[string]any{"type":"text","text":"Fila experimental de eventos sinteticos."}}},nil
+    case "consecom_live_aguardar_evento":
+        after,wait,err:=parseWaitArgs(args)
+        if err!=nil{return nil,err}
+        value:=a.broker.waitAfter(ctx,after,wait).asMap()
+        data,_:=json.Marshal(value)
+        return map[string]any{"structuredContent":value,"content":[]any{map[string]any{"type":"text","text":string(data)}}},nil
 	case "consecom_live_ler_evento":
 		var p struct {
 			ID string `json:"id"`
@@ -237,7 +237,7 @@ func (a *app) routeMCP(w http.ResponseWriter, r *http.Request) {
 			jsonResponse(w, 200, rpcError(q.ID, -32602, "invalid params"))
 			return
 		}
-		out, err := a.callTool(p.Name, p.Arguments)
+		out, err := a.callTool(r.Context(),p.Name, p.Arguments)
 		if err != nil {
 			jsonResponse(w, 200, result(q.ID, map[string]any{"isError": true, "content": []any{map[string]any{"type": "text", "text": err.Error()}}}))
 			return
@@ -311,13 +311,17 @@ func (a *app) routeEmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
-	jsonResponse(w, 201, a.broker.emit())
+    ev,err:=a.broker.emitWithError()
+    if err!=nil{http.Error(w,"event journal unavailable",503);return}
+    jsonResponse(w,201,ev)
 }
 func (a *app) mux() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("/mcp", a.routeMCP)
 	m.HandleFunc("/events", a.routeEvents)
 	m.HandleFunc("/demo/emit", a.routeEmit)
+    m.HandleFunc("/demo/widget-report",a.recordObservation)
+    m.HandleFunc("/demo/widget-observations",a.listObservations)
 	m.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		jsonResponse(w, 200, map[string]string{"status": "ok", "mode": "synthetic-only"})
 	})
@@ -333,6 +337,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+    journal:=os.Getenv("CONSECOM_LIVE_STATE_FILE")
+    if journal==""{journal,err=defaultJournalLocation();if err!=nil{log.Fatal(err)}}
+    if err=a.broker.restoreJournal(journal);err!=nil{log.Fatalf("cannot restore synthetic event journal: %v",err)}
 	addr := os.Getenv("CONSECOM_LIVE_LISTEN")
 	if addr == "" {
 		addr = "127.0.0.1:8793"

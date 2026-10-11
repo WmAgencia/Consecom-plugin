@@ -39,6 +39,17 @@ button{border:1px solid #348f71;border-radius:10px;background:#13533f;color:whit
   const MAX_ATTEMPTS = 10, MIN_INTERVAL_MS = 30000;
 
   function report(msg) { status.textContent = msg; }
+  function observe(ev, mode, outcome, detail) {
+    // Best-effort telemetry only. It never contains chat text or private data.
+    if (!ev || !/^evt-[0-9]{6}$/.test(ev.id)) return;
+    const payload = JSON.stringify({EventID:ev.id,Mode:mode,Status:outcome,Error:String(detail||"").slice(0,180)});
+    try {
+      void fetch(origin+"/demo/widget-report?channel="+encodeURIComponent(channel), {
+        method:"POST",headers:{"Content-Type":"application/json"},body:payload,
+        mode:"cors",credentials:"omit",keepalive:false
+      }).catch(function(){});
+    } catch (_err) {}
+  }
   async function requestTurn(ev, manual) {
     if (!ev || !ev.id || !/^evt-[0-9]{6}$/.test(ev.id)) return;
     if (!manual) {
@@ -50,14 +61,26 @@ button{border:1px solid #348f71;border-radius:10px;background:#13533f;color:whit
     if (typeof fn !== "function") { report("ChatGPT não disponibilizou sendFollowUpMessage neste componente."); return; }
     lastAttempt = Date.now();
     attempts++;
+    const mode=manual?"manual":"auto";
+    observe(ev,mode,"attempt","");
+    let settled=false;
+    // A pending promise is not proof of wake-up.
+    setTimeout(()=>{if(!settled)observe(ev,mode,"pending","No host result within 5000ms")},5000);
     const prompt = "Consecom Live POC: analise somente o evento sintético "+ev.id+
       " usando a ferramenta consecom_live_ler_evento do app. Este é um experimento e não deve alterar arquivos.";
     report("Solicitando análise de "+ev.id+" ao ChatGPT...");
     try {
       const response = await fn({prompt:prompt,scrollToBottom:false});
-      if (response && response.isError) { report("O ChatGPT rejeitou a solicitação para "+ev.id); return; }
+      settled=true;
+      if (response && response.isError) {
+        observe(ev,mode,"host_rejected","Host returned isError");
+        report("O ChatGPT rejeitou a solicitação para "+ev.id); return;
+      }
+      observe(ev,mode,"host_resolved","");
       report("Solicitação entregue ao host para "+ev.id+". Verifique se um novo turno realmente começou.");
     } catch (e) {
+      settled=true;
+      observe(ev,mode,"host_rejected",String((e&&e.message)||e).slice(0,180));
       report("Solicitação não aceita: "+String((e && e.message)||e).slice(0,180));
     }
   }

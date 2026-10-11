@@ -1,0 +1,111 @@
+name: Consecom Live Chat host — ephemeral HTTPS
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/consecom-live-reverse-wait-lab]
+    paths:
+      - .github/workflows/consecom-live-chat-host-test.yml
+permissions:
+  contents: read
+concurrency:
+  group: consecom-live-chat-host-test
+  cancel-in-progress: true
+jobs:
+  isolated-chat-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 23
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build synthetic-only MCP lab
+        run: |
+          go test ./experiments/consecom-live-poc
+          go build -o /tmp/consecom-live-chat-lab ./experiments/consecom-live-poc
+      - name: Start temporary HTTPS tunnel and synthetic MCP
+        id: start-host
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 --silent --show-error \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            --output /tmp/cloudflared
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared --version
+          /tmp/cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8793 > /tmp/consecom-tunnel.log 2>&1 &
+          echo $! > /tmp/consecom-tunnel.pid
+          origin=""
+          for i in $(seq 1 60); do
+            origin="$(grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/consecom-tunnel.log | head -n 1 || true)"
+            if [[ -n "$origin" ]]; then break; fi
+            sleep 1
+          done
+          if [[ -z "$origin" ]]; then
+            echo "::error::No public TryCloudflare URL received"
+            sed -E 's/https:\/\/[a-z0-9-]+\.trycloudflare\.com/[REDACTED_URL]/g' /tmp/consecom-tunnel.log | tail -n 40
+            exit 1
+          fi
+          echo "LAB_ORIGIN=$origin" >> "$GITHUB_ENV"
+          export CONSECOM_LIVE_PUBLIC_ORIGIN="$origin"
+          export CONSECOM_LIVE_TOKEN="$(openssl rand -hex 32)"
+          export CONSECOM_LIVE_STATE_FILE="$RUNNER_TEMP/consecom-live-chat-events.json"
+          export CONSECOM_LIVE_LISTEN="127.0.0.1:8793"
+          echo "$CONSECOM_LIVE_TOKEN" > "$RUNNER_TEMP/consecom-live-token"
+          chmod 600 "$RUNNER_TEMP/consecom-live-token"
+          /tmp/consecom-live-chat-lab > "$RUNNER_TEMP/consecom-live-lab.log" 2>&1 &
+          echo $! > /tmp/consecom-live.pid
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8793/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:8793/healthz
+          echo
+          {
+            echo "### Consecom Live — test URL (expires when this job ends)"
+            echo "MCP URL: \`$origin/mcp\`"
+            echo ""
+            echo "1. Connect as a custom MCP server with no auth (synthetic tools only)."
+            echo "2. Install the plugin and open a normal ChatGPT Chat; call \`consecom_live_abrir\`."
+            echo "3. Synthetic events will arrive automatically every 40 seconds."
+            echo "4. The widget tries sendFollowUpMessage WITHOUT A CLICK and logs the host result."
+            echo ""
+            echo "This endpoint is read-only for MCP and **does not access your computer**."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "MCP_TEST_URL=$origin/mcp"
+          # Publish a short-lived artifact whose NAME contains only the public
+          # synthetic MCP hostname, never tokens or private machine metadata.
+          echo "hostname=${origin#https://}" >> "$GITHUB_OUTPUT"
+          echo "$origin/mcp" > "$RUNNER_TEMP/consecom-live-url.txt"
+      - name: Publish live test URL as artifact metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: consecom-live-${{ steps.start-host.outputs.hostname }}
+          path: ${{ runner.temp }}/consecom-live-url.txt
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Keep test online and emit synthetic events
+        shell: bash
+        run: |
+          set -euo pipefail
+          token="$(cat "$RUNNER_TEMP/consecom-live-token")"
+          # The 18 minute test window begins after the domain has been printed.
+          for i in $(seq 1 25); do
+            sleep 40
+            if ! kill -0 "$(cat /tmp/consecom-live.pid)" 2>/dev/null; then
+              echo "::error::Synthetic MCP server stopped unexpectedly"
+              tail -n 50 "$RUNNER_TEMP/consecom-live-lab.log"
+              exit 1
+            fi
+            output="$(curl --silent --show-error --fail --max-time 5 \
+              -X POST -H "Authorization: Bearer $token" \
+              http://127.0.0.1:8793/demo/emit || true)"
+            echo "Synthetic event $i emitted at $(date -u +%FT%TZ)"
+            # No tokens, channel IDs or machine data appear in logs.
+            echo "SSE + MCP state event: $(printf '%s' "$output" | jq -r '.id // "emit_failed"')"
+            # Host telemetry requires the internal channel secret, so it is
+            # collected only by the server itself, not printed by this workflow.
+            # The test subject can read rejections in the widget status area.
+          done
+          echo "Experiment ended; no evidence of ChatGPT wake unless a real host turn was observed."
