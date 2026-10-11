@@ -56,6 +56,8 @@ type LiveLab struct {
  running bool
  until time.Time
  lastPanelSent time.Time
+ lastLivePoll time.Time
+ lastLiveAutoPoll time.Time
  replyPath string
  replies []LiveChatReply
  replySeq uint64
@@ -131,6 +133,7 @@ func (b *LiveLab) snapshot(after uint64)map[string]any{
 }
 func (b *LiveLab) wait(ctx context.Context,after uint64,ms int)map[string]any{
  if ms<0{ms=0};if ms>12000{ms=12000}
+ b.markLivePoll(false)
  start:=time.Now()
  timeout:=time.NewTimer(time.Duration(ms)*time.Millisecond);defer timeout.Stop()
  for {
@@ -229,6 +232,10 @@ func liveToolSpecs()[]LiveTool{
    "after_sequence":map[string]any{"type":"integer","minimum":0},
    "wait_ms":map[string]any{"type":"integer","minimum":0,"maximum":12000}},"after_sequence"),Annotations:readonly,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"model","app"}},"openai/widgetAccessible":true}},
+  {Name:"consecom_live_aguardar_e_assumir",Description:"Fast-path: espera ate 6s e reivindica mensagens PANEL_MESSAGE pendentes em uma unica chamada atomica. Somente IDs em claimed_ids pertencem ao widget que fez a chamada.",InputSchema:schema(map[string]any{
+   "after_sequence":map[string]any{"type":"integer","minimum":0},
+   "wait_ms":map[string]any{"type":"integer","minimum":0,"maximum":6000}},"after_sequence"),Annotations:obs,
+   Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
   {Name:"consecom_live_ler_evento",Description:"Ler evento recebido, inclusive uma mensagem digitada no painel Consecom. Nao executa comandos.",InputSchema:schema(map[string]any{"id":str("evt-000001")},"id"),Annotations:readonly},
   {Name:"consecom_live_reportar_host",Description:"Registrar resultado da tentativa do widget no host. Nao confirma se o modelo acordou.",InputSchema:schema(map[string]any{
    "id":str("ID do evento sintetico"),
@@ -287,6 +294,11 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
    if err=json.Unmarshal(m["wait_ms"],&ms);err!=nil||ms<0||ms>12000{return nil,errors.New("invalid wait_ms")}
   }
   v=a.live.wait(ctx,seq,ms)
+ case "consecom_live_aguardar_e_assumir":
+  seq,e:=liveArgSeq(m,"after_sequence");if e!=nil{return nil,e}
+  ms:=5000
+  if len(m["wait_ms"])>0{if e=json.Unmarshal(m["wait_ms"],&ms);e!=nil||ms<0||ms>6000{return nil,errors.New("invalid wait_ms")}}
+  v,err=a.live.waitAndClaim(ctx,seq,ms);if err!=nil{return nil,err}
  case "consecom_live_assumir_mensagem":
   key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
   claimed,err:=a.live.claimPanelMessage(key);if err!=nil{return nil,err}
