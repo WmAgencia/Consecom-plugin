@@ -33,8 +33,7 @@ func validateProjectPatch(root Root, patch string)error{
   return errors.New("somente patches de texto UTF-8 com LF")
  }
  seen:=0
- for _,line:=range strings.Split(patch,"
-"){
+ for _,line:=range strings.Split(patch,string(rune(10))){
   var path string
   switch {
   case strings.HasPrefix(line,"diff --git a/"):
