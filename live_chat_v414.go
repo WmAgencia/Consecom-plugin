@@ -79,8 +79,7 @@ func validateChatReply(text,kind string)error{
  if kind!="final"&&kind!="andamento"{return errors.New("tipo deve ser andamento ou final")}
  if text==""||strings.TrimSpace(text)==""{return errors.New("texto da resposta vazio")}
  if !utf8.ValidString(text)||len(text)>maxChatReplyBytes{return errors.New("resposta deve ser UTF-8 de ate 6000 bytes")}
- for _,r:=range text{if (r<32&&r!='
-'&&r!='	'&&r!='')||r==127{return errors.New("resposta contem controle invalido")}}
+ for _,r:=range text{if (r<32&&r!=10&&r!=9&&r!=13)||r==127{return errors.New("resposta contem controle invalido")}}
  return nil
 }
 func (b *LiveLab) publishChatReply(eventID,text,kind,key string)(LiveChatReply,error){
