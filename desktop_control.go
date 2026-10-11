@@ -33,7 +33,7 @@ func (a *App) desktopRequest(kind string, action DesktopAction)(any,error){
  }
  data,_:=json.Marshal(action)
  desc:="Controle visual do Windows: "+kind
- if kind=="type" {desc+=fmt.Sprintf(" (%d caracteres)",len(action.Text))}
+ if kind=="type" {desc+=fmt.Sprintf(" (%d caracteres; texto: %q)",len([]rune(action.Text)),clip(action.Text,180))}
  if kind=="open" {desc+=" "+action.App}
  if kind!="open" {desc+=fmt.Sprintf(" na janela %d",action.Window)}
  id,e:=a.queue(&Pending{Kind:"desktop",Action:kind,Content:string(data),Description:desc+" — exige aprovacao local"})
