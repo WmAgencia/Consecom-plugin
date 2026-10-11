@@ -31,8 +31,23 @@ func (a *App) setMode(mode, acknowledgement string) error {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	previous := a.cfg.ApprovalMode
 	a.cfg.ApprovalMode = mode
-	return a.saveLocked()
+	if err := a.saveLocked(); err != nil {
+		a.cfg.ApprovalMode = previous
+		return err
+	}
+	if mode == "maximum" {
+		// Pending prompts issued under an older mode must not linger in the panel.
+		// Cancel, never silently execute, old operations. Remote self-updates are
+		// explicitly independent and remain queued until a separate local opt-in.
+		for id, pending := range a.actions {
+			if pending.Kind != "update" {
+				delete(a.actions, id)
+			}
+		}
+	}
+	return nil
 }
 func (a *App) canAuto(kind string) bool {
 	mode := a.mode()
