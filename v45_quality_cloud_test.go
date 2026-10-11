@@ -120,3 +120,19 @@ func TestBrowserQARecorderDoesNotExportConsolePayloads(t *testing.T){
  }}
  if !found{t.Fatal("QA instrumentation not found")}
 }
+
+
+func TestQualityGateRunsActualNodeScripts(t *testing.T){
+ if _,err:=exec.LookPath("npm");err!=nil{t.Skip("npm unavailable")}
+ a,root:=testProjectV45(t)
+ _=a
+ out,err:=runApprovedPatchTest(root,"npm_quality")
+ if err!=nil{t.Fatalf("quality gate failed unexpectedly: %v; output=%q",err,out)}
+ for _,name:=range []string{"npm_lint","npm_test","npm_build"}{
+  if !strings.Contains(out,name){t.Fatalf("missing %s in completed quality gate: %s",name,out)}
+ }
+ // A regression must fail the quality gate, preventing patch acceptance.
+ failing:=`{"scripts":{"lint":"node -e \"process.exit(1)\"","test":"node -e \"console.log('ok')\"","build":"node -e \"console.log('ok')\""},"dependencies":{"vite":"^6"}}`
+ if err:=os.WriteFile(filepath.Join(root.Path,"package.json"),[]byte(failing),0600);err!=nil{t.Fatal(err)}
+ if _,err:=runApprovedPatchTest(root,"npm_quality");err==nil{t.Fatal("failing lint did not fail the quality gate")}
+}
