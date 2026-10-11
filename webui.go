@@ -170,6 +170,16 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-bubble{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px 15px;font-size:13px;line-height:1.65;background:#1d3349;color:#f0faff;border:1px solid #345a74;border-radius:15px 15px 15px 5px}
 .live-chat-row.mine .live-chat-bubble{background:linear-gradient(135deg,#116d5f,#15584e);border-color:#278e77;border-radius:15px 15px 5px 15px}
 .live-chat-row.progress .live-chat-bubble{background:#173042;border-style:dashed;border-color:#68829d;color:#d9e5ed}
+.live-chat-typing{display:flex;align-items:center;gap:9px;min-height:32px;font-size:12px;color:#c6d7e5}
+.live-chat-typing-dots{display:inline-flex;gap:4px;align-items:center;height:12px}
+.live-chat-typing-dots i{width:6px;height:6px;border-radius:50%;background:#66d9b2;animation:consecomTyping 1.25s ease-in-out infinite;opacity:.4}
+.live-chat-typing-dots i:nth-child(2){animation-delay:.17s}
+.live-chat-typing-dots i:nth-child(3){animation-delay:.34s}
+@keyframes consecomTyping{0%,65%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+@media(prefers-reduced-motion:reduce){.live-chat-typing-dots i{animation:none;opacity:.8}}
+.live-chat-bench{font-size:11px;color:#8fbecc;line-height:1.5;margin-top:5px;white-space:pre-wrap}
+.live-chat-bench button{font-size:11px;padding:5px 8px;margin-left:6px}
+
 .live-chat-meta{color:#779cae;font-size:10px;margin:5px 5px 0;display:flex;justify-content:space-between;gap:10px}
 .live-chat-row.mine .live-chat-meta{justify-content:flex-end}
 .live-chat-bottom{padding:15px 17px 12px;border-top:1px solid #234055}
@@ -184,7 +194,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
 <h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Conferindo se o Consecom Live está ativo...</p></div></div>
-<div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
+<div style="display:flex;gap:6px;flex-wrap:wrap"><button id="liveBenchButton" onclick="runConsecomTenTests()" title="Faz 10 mensagens reais, sequenciais, com o Consecom Live aberto">▶ Testar 10x</button><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
 <div class="live-chat-stream" id="liveChatStream" role="log" aria-live="polite" aria-relevant="additions">
 <div class="live-chat-empty">Esta é sua conversa com o ChatGPT. Escreva abaixo, mantenha o Consecom Live ativo na conversa do ChatGPT e veja a resposta chegar aqui.</div>
 </div>
@@ -192,7 +202,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <div class="live-chat-editor"><textarea id="liveUserMessage" maxlength="2000" rows="2" placeholder="Pergunte algo ou peça uma implementação..."></textarea>
 <button class="primary" id="liveSendButton" onclick="sendConsecomMessage()">➤ Enviar</button></div>
 <div class="live-chat-info"><span id="liveComposeState" class="live-chat-status">Pronto para conversar.</span>
-<span>Enter para enviar · Shift+Enter para nova linha</span></div>
+<span>Enter para enviar · Shift+Enter para nova linha</span></div><div class="live-chat-bench" id="liveBenchState" role="status">Teste real 10x: exige Consecom Live ativo e a página aberta. Não usa API paga.</div>
 </div></div>
 
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
@@ -230,6 +240,7 @@ async function api(path,data){let opt={headers:{'X-Local-Key':KEY}};if(data!==un
 let liveComposeBusy=false;
 let liveChatSignature='';
 let liveChatBooted=false;
+let liveBenchRunning=false;
 const latencyAcknowledged=new Set();
 const liveDeliveryNames={queued:"Aguardando conexão",claimed:"ChatGPT processando",host_resolved:"Aguardando resposta",host_rejected:"Envio recusado",superseded:"Reenviada",answered:"Respondida"};
 async function sendConsecomMessage(){
@@ -267,7 +278,9 @@ async function refreshConsecomChat(force=false){
      mark('liveComposeState','A mensagem está na fila há '+Math.round(age/1000)+'s. Consecom Live não está confirmado como ativo; abra ou reabra o componente no ChatGPT.');
     }
    }
-   const sig=messages.map(x=>x.id+':'+x.status).join('|');
+   const awaiting=messages.filter(m=>m.role==='user'&&m.status!=='answered'&&m.status!=='superseded'&&m.status!=='host_rejected'&&(m.status==='host_resolved'||Boolean(m.dispatched_at))).filter(m=>!messages.some(r=>r.role==='assistant'&&r.kind==='final'&&r.event_id===m.event_id));
+   const typingFor=awaiting.length?awaiting[awaiting.length-1].event_id:'';
+   const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor;
   if(!force&&sig===liveChatSignature)return;
   liveChatSignature=sig;
   const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<90;
@@ -293,6 +306,25 @@ async function refreshConsecomChat(force=false){
    }
    fragment.append(row);
   }
+  if(typingFor){
+   // This is a waiting animation, not streamed output or evidence that the
+   // model has generated tokens. It appears only after confirmed dispatch.
+   const row=dom('div',undefined,'live-chat-row');
+   row.setAttribute('data-typing-for',typingFor);
+   const bubble=dom('div',undefined,'live-chat-bubble');
+   const line=dom('div',undefined,'live-chat-typing');
+   line.setAttribute('role','status');
+   line.setAttribute('aria-label','Mensagem encaminhada; aguardando resposta do ChatGPT');
+   line.title='Indicador de espera: não comprova que o modelo esteja digitando em tempo real.';
+   const dots=dom('span',undefined,'live-chat-typing-dots');
+   dots.setAttribute('aria-hidden','true');
+   for(let i=0;i<3;i++)dots.append(dom('i'));
+   line.append(dom('span','ChatGPT está digitando'),dots);
+   bubble.append(line);
+   const meta=dom('div','Mensagem encaminhada · aguardando resposta','live-chat-meta');
+   row.append(bubble,meta);
+   fragment.append(row);
+  }
   box.replaceChildren(fragment);
   // One authenticated acknowledgement per recently displayed final message.
   // Capture the browser-render time, not the next 900ms polling deadline.
@@ -310,6 +342,7 @@ async function refreshConsecomChat(force=false){
   const last=messages[messages.length-1];
   if(last){
    if(last.role==='assistant'&&last.kind==='final')mark('liveComposeState','Resposta recebida do ChatGPT.');
+   else if(typingFor)mark('liveComposeState','Mensagem encaminhada ao ChatGPT. Aguardando a resposta...');
    else if(last.role==='user')mark('liveComposeState',liveDeliveryNames[last.status]||'Aguardando ChatGPT...');
   }
  }catch(e){mark('liveComposeState','Chat temporariamente indisponível: '+e.message)}
