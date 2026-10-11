@@ -41,6 +41,26 @@ func (a *App) canAuto(kind string) bool {
 	}
 	return mode == "category" && kind == "write"
 }
+
+
+// approvalPolicy reports the effective server-side setting. It is read-only:
+// client/platform permissions, Windows UAC, protected paths and project roots
+// are enforced independently of the locally selected approval mode.
+func (a *App) approvalPolicy() map[string]any {
+	mode := a.mode()
+	roots := a.roots()
+	return map[string]any{
+		"mode": mode,
+		"local_reprompt_disabled": mode == "maximum",
+		"authorized_project_roots": len(roots),
+		"project_roots_still_required": true,
+		"remote_updates_separate_opt_in": true,
+		"remote_updates_authorized": a.updateStatus().RemoteApproved,
+		"platform_and_windows_permissions_still_apply": true,
+		"note": "Aprovacao maxima elimina prompts adicionais do Consecom para acoes locais permitidas, mas nao concede acesso a pastas nao cadastradas, nao substitui permissao do cliente MCP/ChatGPT nem desativa UAC ou as regras de protecao.",
+	}
+}
+
 func (a *App) markMCP() { a.mu.Lock(); a.lastMCP = time.Now(); a.mu.Unlock() }
 func (a *App) statusExtra() map[string]any {
 	a.mu.Lock()
