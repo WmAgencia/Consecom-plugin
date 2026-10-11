@@ -49,7 +49,7 @@ func (a *App) devJobStart(rootID, action string, approved bool) (any,error) {
  if err!=nil{return nil,err}
  if isBroadOrDangerousRoot(root.Path) {return nil,errors.New("projeto fora do escopo")}
  if err=ensureNoLinks(root.Path);err!=nil{return nil,err}
- if jobNeedsApproval(action) && !approved {
+ if jobNeedsApproval(action) && !approved && a.mode()!="maximum" {
   id,e:=a.queue(&Pending{Kind:"devjob",Path:root.Path,Action:action,Description:"Terminal: executar "+action+" no projeto "+root.Name+". Pode executar scripts do projeto; verifique antes de aprovar."})
   if e!=nil{return nil,e}
   return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil

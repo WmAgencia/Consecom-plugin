@@ -36,7 +36,14 @@ func (a *App) desktopRequest(kind string, action DesktopAction)(any,error){
  if kind=="type" {desc+=fmt.Sprintf(" (%d caracteres; texto: %q)",len([]rune(action.Text)),clip(action.Text,180))}
  if kind=="open" {desc+=" "+action.App}
  if kind!="open" {desc+=fmt.Sprintf(" na janela %d",action.Window)}
- id,e:=a.queue(&Pending{Kind:"desktop",Action:kind,Content:string(data),Description:desc+" — exige aprovacao local"})
+ p:=&Pending{Kind:"desktop",Action:kind,Content:string(data),Description:desc}
+ if a.mode()=="maximum" {
+  result,e:=a.approveDesktop(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ p.Description+=" — exige aprovacao local"
+ id,e:=a.queue(p)
  if e!=nil{return nil,e}
  return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
