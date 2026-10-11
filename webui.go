@@ -177,9 +177,6 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-typing-dots i:nth-child(3){animation-delay:.34s}
 @keyframes consecomTyping{0%,65%,100%{opacity:.35;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 @media(prefers-reduced-motion:reduce){.live-chat-typing-dots i{animation:none;opacity:.8}}
-.live-chat-bench{font-size:11px;color:#8fbecc;line-height:1.5;margin-top:5px;white-space:pre-wrap}
-.live-chat-bench button{font-size:11px;padding:5px 8px;margin-left:6px}
-
 .live-chat-meta{color:#779cae;font-size:10px;margin:5px 5px 0;display:flex;justify-content:space-between;gap:10px}
 .live-chat-row.mine .live-chat-meta{justify-content:flex-end}
 .live-chat-bottom{padding:15px 17px 12px;border-top:1px solid #234055}
@@ -194,7 +191,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
 <h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Conferindo se o Consecom Live está ativo...</p></div></div>
-<div style="display:flex;gap:6px;flex-wrap:wrap"><button id="liveBenchButton" onclick="runConsecomTenTests()" title="Faz 10 mensagens reais, sequenciais, com o Consecom Live aberto">▶ Testar 10x</button><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
+<div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
 <div class="live-chat-stream" id="liveChatStream" role="log" aria-live="polite" aria-relevant="additions">
 <div class="live-chat-empty">Esta é sua conversa com o ChatGPT. Escreva abaixo, mantenha o Consecom Live ativo na conversa do ChatGPT e veja a resposta chegar aqui.</div>
 </div>
@@ -202,7 +199,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <div class="live-chat-editor"><textarea id="liveUserMessage" maxlength="2000" rows="2" placeholder="Pergunte algo ou peça uma implementação..."></textarea>
 <button class="primary" id="liveSendButton" onclick="sendConsecomMessage()">➤ Enviar</button></div>
 <div class="live-chat-info"><span id="liveComposeState" class="live-chat-status">Pronto para conversar.</span>
-<span>Enter para enviar · Shift+Enter para nova linha</span></div><div class="live-chat-bench" id="liveBenchState" role="status">Teste real 10x: exige Consecom Live ativo e a página aberta. Não usa API paga.</div>
+<span>Enter para enviar · Shift+Enter para nova linha</span></div>
 </div></div>
 
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
@@ -240,7 +237,6 @@ async function api(path,data){let opt={headers:{'X-Local-Key':KEY}};if(data!==un
 let liveComposeBusy=false;
 let liveChatSignature='';
 let liveChatBooted=false;
-let liveBenchRunning=false;
 const latencyAcknowledged=new Set();
 const liveDeliveryNames={queued:"Aguardando conexão",claimed:"Encaminhando ao ChatGPT",host_resolved:"Aguardando resposta",host_rejected:"Envio recusado",superseded:"Reenviada",answered:"Respondida"};
 async function sendConsecomMessage(){
@@ -356,87 +352,6 @@ async function showConsecomLatency(){
   const sec=n=>n===undefined?'—':(n/1000).toFixed(2)+'s';
   mark('liveComposeState','Latência '+latest.event_id+': fila '+sec(ms.queue_ms)+' · reivindicação→envio '+sec(ms.claim_to_followup_ms)+' · envio→resposta '+sec(ms.followup_to_reply_ms)+' · resposta→painel '+sec(ms.reply_to_display_ms)+' · total '+sec(ms.total_to_reply_ms)+'. Maior etapa: '+latest.bottleneck+'.');
  }catch(e){toast('Não foi possível consultar a latência: '+e.message,true)}
-}
-async function runConsecomTenTests(){
- if(liveBenchRunning)return;
- const output=document.getElementById('liveBenchState'),button=document.getElementById('liveBenchButton');
- try{
-  const chat=(await api('live/chat')).result;
-  if(!chat.connection||chat.connection.automatic_ready!==true){
-   output.textContent='Teste não iniciado: abra Consecom Live no ChatGPT e aguarde “recepção automática ativa”.';
-   return;
-  }
-  const previous=(chat.messages||[]).filter(m=>m.role==='user'&&['queued','claimed','host_resolved'].includes(m.status));
-  if(previous.length){
-   output.textContent='Teste não iniciado: aguarde as mensagens anteriores serem respondidas antes de iniciar 10 novas.';
-   return;
-  }
-  if(!confirm('Executar 10 mensagens de teste REAIS no ChatGPT Chat? O Consecom Live deve permanecer aberto, e o teste pode levar vários minutos. Não usa API paga.'))return;
-  liveBenchRunning=true;button.disabled=true;
-  const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-  const results=[];
-  let cancelled='';
-  const round2=n=>(n/1000).toFixed(2).replace('.',',');
-  for(let i=1;i<=10;i++){
-   if(document.hidden){cancelled='A aba ficou oculta e o teste foi interrompido para evitar envio sem supervisão.';break}
-   output.textContent='Teste real '+i+'/10: enviando e aguardando resposta. Concluídos: '+results.length+'.';
-   const sent=(await api('live/send',{message:'Teste automático de latência Consecom '+i+'/10. Responda apenas OK '+i+'.'})).result;
-   let result=null,finalReceived=false;
-   const timeout=Date.now()+120000;
-   // Wait for the actual final reply before sending another host turn, avoiding a flood
-   // of concurrent ChatGPT messages. Delivery latency excludes model generation.
-   while(Date.now()<timeout){
-    if(document.hidden){cancelled='A aba ficou oculta; teste interrompido.';break}
-    const [latency,transcript]=await Promise.all([
-     api('live/latency'),api('live/chat')
-    ]);
-    const candidate=(latency.result.messages||[]).find(m=>m.event_id===sent.id);
-    if(candidate){
-     const stamps=candidate.timestamps||{};
-     const dispatched=stamps.followup_at||'';
-     const accepted=stamps.host_resolved_at||'';
-     const first=stamps.sent_at||sent.created_at;
-     const last=dispatched||accepted;
-     if(last&&Number.isFinite(Date.parse(first))&&Number.isFinite(Date.parse(last))){
-      const duration=Date.parse(last)-Date.parse(first);
-      if(duration>=0){
-       result={id:sent.id,ms:duration,exact:Boolean(dispatched)};
-      }
-     }
-    }
-    const turns=transcript.result.messages||[];
-    if(turns.some(m=>m.event_id===sent.id&&m.role==='assistant'&&m.kind==='final')){
-     finalReceived=true;
-     break;
-    }
-    if(turns.some(m=>m.id===sent.id&&['host_rejected','superseded'].includes(m.status))){
-     cancelled='Envio '+sent.id+' recusado ou substituído pelo host.';break;
-    }
-    output.textContent='Teste real '+i+'/10 · '+sent.id+': '+(result?'despacho '+round2(result.ms)+'s'+(result.exact?' (exato)':' (limite superior)'):'aguardando despacho')+' · esperando resposta final para não sobrepor mensagens.';
-    await delay(1200);
-   }
-   if(result)results.push(result);
-   if(cancelled)break;
-   if(!finalReceived){cancelled='A resposta final não chegou em 120s; teste interrompido para evitar 10 turnos concorrentes.';break}
-   if(i<10)await delay(3400);
-  }
-  const exact=results.filter(r=>r.exact);
-  const values=exact.map(r=>r.ms).sort((a,b)=>a-b);
-  if(values.length){
-   const sum=values.reduce((a,b)=>a+b,0);
-   const med=values.length%2?values[(values.length-1)/2]:(values[values.length/2-1]+values[values.length/2])/2;
-   const p90=values[Math.ceil(values.length*.9)-1];
-   const above15=values.filter(v=>v>15000).length;
-   output.textContent='Teste real: '+results.length+'/10 mensagens, '+values.length+' despachos medidos exatamente · média '+round2(sum/values.length)+'s · mediana '+round2(med)+'s · P90 '+round2(p90)+'s · pior '+round2(values[values.length-1])+'s · acima de 15s: '+above15+'.'+(results.length-values.length?' Outros '+(results.length-values.length)+' são apenas limites superiores por falta de followup_at.':'')+(cancelled?' PARCIAL: '+cancelled:' Concluído.')+' Tempo do modelo excluído somente das medições exatas.';
-  }else{
-   output.textContent='Foram registrados '+results.length+' eventos, porém sem timestamp exato de despacho. Não é possível calcular média/P90 confiáveis. '+(cancelled||'Verifique a telemetria MCP.');
-  }
- }catch(e){
-  if(output)output.textContent='Teste 10x interrompido: '+e.message;
- }finally{
-  liveBenchRunning=false;
-  if(button)button.disabled=false;
- }
 }
 async function retryConsecomMessage(id){
  if(!confirm('Reenviar esta mensagem? Ela pode ser recebida duas vezes no ChatGPT.'))return;
