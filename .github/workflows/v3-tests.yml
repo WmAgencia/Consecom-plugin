@@ -18,7 +18,8 @@ on:
       - feat/v4.11-exclusive-browser-graph-index
       - feat/v4.12-live-lab-single-mcp
       - feat/v4.13-consecom-chat-outbox
-      - fix/v4.14.0-live-widget-backcompat
+      - fix/v4.13.1-live-widget-backcompat
+      - feat/v4.14-bidirectional-consecom-chat
   workflow_dispatch:
 permissions:
   contents: read
