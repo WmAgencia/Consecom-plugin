@@ -138,7 +138,7 @@ func toolSpec(name, desc string, props map[string]any, required []string, widget
 	if len(required) > 0 {
 		s["required"] = required
 	}
-	t := map[string]any{"name": name, "description": desc, "inputSchema": s, "annotations": map[string]any{"readOnlyHint": name != "consecom_live_emitir_teste"}}
+	t := map[string]any{"name": name, "description": desc, "inputSchema": s, "annotations": map[string]any{"readOnlyHint": true}, "securitySchemes": []map[string]any{{"type": "noauth"}}}
 	if widget {
 		t["_meta"] = map[string]any{"ui": map[string]any{"resourceUri": resourceURI}, "openai/outputTemplate": resourceURI}
 	}
@@ -148,7 +148,6 @@ func (a *app) tools() []map[string]any {
 	return []map[string]any{
 		toolSpec("consecom_live_abrir", "Exibe um painel de eventos exclusivamente simulados do Consecom Live. Nao executa comandos no PC.", map[string]any{}, nil, true),
 		toolSpec("consecom_live_ler_evento", "Le dados de um evento sintético previamente emitido.", map[string]any{"id": map[string]any{"type": "string"}}, []string{"id"}, false),
-		toolSpec("consecom_live_emitir_teste", "Cria evento sintético BUILD_FAILED para testar o painel. Nao altera arquivos.", map[string]any{}, nil, false),
 	}
 }
 func (a *app) callTool(name string, args json.RawMessage) (any, error) {
@@ -156,9 +155,6 @@ func (a *app) callTool(name string, args json.RawMessage) (any, error) {
 	case "consecom_live_abrir":
 		v := map[string]any{"status": "demo", "recent": a.broker.count(), "note": "Apenas eventos simulados"}
 		return map[string]any{"structuredContent": v, "content": []any{map[string]any{"type": "text", "text": "Painel Consecom Live de demonstracao. Os eventos sao simulados."}}}, nil
-	case "consecom_live_emitir_teste":
-		ev := a.broker.emit()
-		return map[string]any{"structuredContent": ev, "content": []any{map[string]any{"type": "text", "text": fmt.Sprintf("Evento de teste criado: %s", ev.ID)}}}, nil
 	case "consecom_live_ler_evento":
 		var p struct {
 			ID string `json:"id"`
@@ -184,10 +180,8 @@ func (a *app) routeMCP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "origin not allowed", 403)
 		return
 	}
-	if !a.authorized(r) {
-		http.Error(w, "unauthorized", 401)
-		return
-	}
+	// MCP exposes synthetic, read-only tools. Real PC data requires OAuth/mTLS.
+	// The event-emitter endpoint /demo/emit remains Bearer-protected.
 	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
 		http.Error(w, "unsupported content type", 415)
 		return
