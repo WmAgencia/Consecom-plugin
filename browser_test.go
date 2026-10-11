@@ -8,31 +8,31 @@ import (
 	"testing"
 )
 
-func TestBrowserSettingsAskByDefault(t *testing.T) {
+func TestBrowserDefaultExclusiveWhenInstalled(t *testing.T) {
+ root:=t.TempDir()
+ t.Setenv("PROGRAMFILES",root)
+ t.Setenv("PROGRAMFILES(X86)","")
+ exe:=filepath.Join(root,`Google\Chrome\Application`,"chrome.exe")
+ if err:=os.MkdirAll(filepath.Dir(exe),0700);err!=nil{t.Fatal(err)}
+ if err:=os.WriteFile(exe,[]byte("stub"),0600);err!=nil{t.Fatal(err)}
 	a, e := NewApp(filepath.Join(t.TempDir(), "config.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	if p := a.getBrowserPreference(); p.Browser != "" || p.Profile != "" {
-		t.Fatal("must ask by default")
-	}
-	if _, _, e := a.resolveBrowserChoice("", ""); e == nil || !strings.Contains(e.Error(), "SELECAO_NECESSARIA") {
-		t.Fatalf("did not require choice: %v", e)
-	}
+	if p:=a.getBrowserPreference();p.Browser!="chrome"||p.Profile!="managed:chatgpt"{t.Fatalf("expected exclusive Chrome: %+v",p)}
+ if browser,profile,e:=a.resolveBrowserChoice("","");e!=nil||browser!="chrome"||profile!="managed:chatgpt"{t.Fatalf("resolved %q %q: %v",browser,profile,e)}
 }
 func TestBrowserInvalidPreferenceNotSaved(t *testing.T) {
 	a, e := NewApp(filepath.Join(t.TempDir(), "config.json"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	for _, p := range []BrowserPreference{{Browser: "chrome", Profile: ""}, {Browser: "", Profile: "personal:Default"}, {Browser: "bad", Profile: "managed:chatgpt"}} {
+	for _, p := range []BrowserPreference{{Browser: "", Profile: ""}, {Browser: "", Profile: "personal:Default"}, {Browser: "bad", Profile: "managed:chatgpt"}, {Browser:"chrome",Profile:"live:current"}} {
 		if a.setBrowserPreference(p) == nil {
 			t.Fatalf("accepted invalid %+v", p)
 		}
 	}
-	if e := a.setBrowserPreference(BrowserPreference{}); e != nil {
-		t.Fatal(e)
-	}
+
 }
 func TestBrowserURLRejectsUnsafeSchemes(t *testing.T) {
 	for _, s := range []string{"javascript:alert(1)", "file:///windows/system32", "http://user:pass@example.com", "ftp://example.org", "http://", "https://example.org\nHost:attacker"} {
@@ -59,49 +59,18 @@ func TestBrowserToolListValid(t *testing.T) {
 	}
 }
 
-// Regression: v2.4.0 advertised live:current in browser_opcoes but rejected
-// it in browser_abrir and in the preference editor.
-func TestLiveCurrentListedAndAccepted(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("PROGRAMFILES", root)
-	t.Setenv("PROGRAMFILES(X86)", "")
-	t.Setenv("LOCALAPPDATA", t.TempDir())
-	exe := filepath.Join(root, `Google\Chrome\Application`, "chrome.exe")
-	if err := os.MkdirAll(filepath.Dir(exe), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(exe, []byte("stub-executable"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	choices := discoverBrowsers()
-	available := false
-	for _, c := range choices {
-		if c.ID == "chrome" {
-			for _, p := range c.Profiles {
-				if p.ID == "live:current" {
-					available = true
-				}
-			}
-		}
-	}
-	if !available {
-		t.Fatal("live profile missing from options")
-	}
-	if !validBrowserProfile("chrome", "live:current") {
-		t.Fatal("Chrome live profile advertised but not accepted")
-	}
-	if validBrowserProfile("edge", "live:current") {
-		t.Fatal("Edge live profile incorrectly accepted")
-	}
-	a, err := NewApp(filepath.Join(t.TempDir(), "config.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := a.setBrowserPreference(BrowserPreference{Browser: "chrome", Profile: "live:current"}); err != nil {
-		t.Fatal(err)
-	}
-	browser, profile, err := a.resolveBrowserChoice("", "")
-	if err != nil || browser != "chrome" || profile != "live:current" {
-		t.Fatalf("got %q %q %v", browser, profile, err)
-	}
+// Preserve legacy recognition without permitting Chrome personal debugging.
+func TestLiveProfileCannotBecomeDefault(t *testing.T){
+ root:=t.TempDir()
+ t.Setenv("PROGRAMFILES",root)
+ t.Setenv("PROGRAMFILES(X86)","")
+ exe:=filepath.Join(root,`Google\Chrome\Application`,"chrome.exe")
+ if err:=os.MkdirAll(filepath.Dir(exe),0700);err!=nil{t.Fatal(err)}
+ if err:=os.WriteFile(exe,[]byte("stub"),0600);err!=nil{t.Fatal(err)}
+ a,err:=NewApp(filepath.Join(t.TempDir(),"config.json"));if err!=nil{t.Fatal(err)}
+ if err:=a.setBrowserPreference(BrowserPreference{Browser:"chrome",Profile:"live:current"});err==nil{t.Fatal("accepted personal browser")}
+ if _,_,err:=a.resolveBrowserChoice("chrome","live:current");err==nil{t.Fatal("attached personal Chrome")}
+ options:=a.browserOptions()
+ choices:=options["browsers"].([]BrowserChoice)
+ for _,c:=range choices{for _,p:=range c.Profiles{if p.ID!="managed:chatgpt"{t.Fatalf("unexpected profile %q",p.ID)}}}
 }
