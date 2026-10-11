@@ -3,7 +3,6 @@ package main
 import (
  "context"
  "encoding/json"
- "net/http"
  "net/http/httptest"
  "path/filepath"
  "strings"
@@ -49,8 +48,7 @@ func TestPanelQueueNotDroppedAndManualRetry(t *testing.T){
  b.mu.Lock();b.lastPanelSent=time.Time{};b.mu.Unlock()
  second,err:=b.retryPanelMessage(first.ID);if err!=nil{t.Fatal(err)}
  if second.ID==first.ID||second.Delivery!="queued"{t.Fatal("retry should use new ID")}
- old,_:=b.get(first.ID)
- if old.Delivery!="superseded"{t.Fatalf("superseded not saved: %+v",old)}
+ if old,ok:=b.get(first.ID);ok&&old.Delivery!="superseded"{t.Fatalf("superseded not saved: %+v",old)}
  if ok,err:=b.claimPanelMessage(second.ID);err!=nil||!ok{t.Fatal("new retry cannot be claimed")}
 }
 func TestPanelConcurrentClaimOnlyOnce(t *testing.T){
@@ -95,4 +93,3 @@ func TestPanelMainUIContainsMessageComposer(t *testing.T){
  if !strings.Contains(liveWidgetHTML,"consecom_live_assumir_mensagem")||!strings.Contains(liveWidgetHTML,"PANEL_MESSAGE"){t.Fatal("widget missing manual-message delivery")}
  if strings.Contains(liveWidgetHTML,"trycloudflare.com"){t.Fatal("widget may not use a second tunnel")}
 }
-var _=http.MethodPost
