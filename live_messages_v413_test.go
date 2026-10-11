@@ -87,7 +87,7 @@ func TestPanelAPILocalCSRFAndAuth(t *testing.T){
  if len(waited["events"].([]LiveEvent))!=1{t.Fatal("missing panel message via live wait")}
 }
 func TestPanelMainUIContainsMessageComposer(t *testing.T){
- for _,phrase:=range []string{"Mensagem para o ChatGPT","id=\"liveUserMessage\"","liveSendButton","api('live/send'","api('live/chat'","Versão 4.14.3"}{
+ for _,phrase:=range []string{"Mensagem para o ChatGPT","id=\"liveUserMessage\"","liveSendButton","api('live/send'","api('live/chat'","Versão 4.14.4"}{
   if !strings.Contains(uiHTML,phrase){t.Fatalf("missing composer element %q",phrase)}
  }
  if !strings.Contains(liveWidgetHTML,"consecom_live_assumir_mensagem")||!strings.Contains(liveWidgetHTML,"PANEL_MESSAGE"){t.Fatal("widget missing manual-message delivery")}
