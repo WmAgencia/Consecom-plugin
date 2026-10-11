@@ -13,7 +13,9 @@ import (
 )
 
 // All development commands are fixed argv (no shell, redirections or arbitrary commands).
-// npm scripts are potentially arbitrary code and ALWAYS require local approval.
+// npm scripts may execute project code. In normal/category mode they require
+// local approval; in maximum mode the user's explicit local setting waives
+// only this additional Consecom prompt, not project scope or client policy.
 var developerActions = map[string][]string{
 	"git_status":    {"git", "status", "--short", "--branch"},
 	"git_branch":    {"git", "branch", "--show-current"},
@@ -44,7 +46,7 @@ func (a *App) developerCommand(rootID, action string, approved bool) (any, error
 	if e = ensureNoLinks(root.Path); e != nil {
 		return nil, e
 	}
-	if npmScriptAction(action) && !approved {
+	if npmScriptAction(action) && !approved && a.mode() != "maximum" {
 		id, er := a.queue(&Pending{Kind: "dev", Description: "Executar script do projeto " + root.Name + " em " + root.Path + ": " + action + " (scripts npm podem executar codigo arbitrario)", Path: root.Path, Action: action})
 		if er != nil {
 			return nil, er
@@ -77,7 +79,7 @@ func (a *App) developerCommand(rootID, action string, approved bool) (any, error
 	if truncated {
 		out = out[:maxOutput]
 	}
-	result := map[string]any{"acao": action, "projeto": root.Name, "saida": out, "truncado": truncated, "aprovado_localmente": approved}
+	result := map[string]any{"acao": action, "projeto": root.Name, "saida": out, "truncado": truncated, "aprovado_localmente": approved, "modo_aprovacao": a.mode(), "sem_prompt_local_modo_maximo": !approved && a.mode() == "maximum"}
 	if ctx.Err() != nil {
 		return result, fmt.Errorf("comando terminou por limite de 45 segundos: %w", ctx.Err())
 	}

@@ -84,3 +84,17 @@ Quando o usuário habilita **Aprovação máxima** no próprio painel (confirma�
 - Deteccao criativa agora prova o executavel e versao antes de considerar instalado e ignora aliases de loja WindowsApps para Python.
 - Codigo de base UI Automation Windows adicionado sem registro MCP de novas acoes; **ainda nao entregue como recurso funcional**.
 - Testes Windows e artefato PREVIEW dependem do CI da branch; nenhuma nova release deve ser declarada sem o resultado final.
+
+
+### Correcao 4.1.1 — consistencia da Aprovacao Maxima
+
+- `dev_execucao` passa a executar os comandos npm permitidos diretamente no **modo maximo**, sem adicionar aprovacao local ao Consecom. Em modos `always` e `category`, scripts continuam exigindo confirmacao no painel.
+- `politica_aprovacao` informa o modo efetivo, se prompts locais foram dispensados, quantas pastas de projeto estao autorizadas e o estado separado de atualizacoes remotas.
+- A descricao das ferramentas de fechar processos, plano de energia e gravacao foi alinhada ao comportamento real do modo maximo.
+- Aprovacao maxima e uma preferencia **do servidor local Consecom**, nao uma permissao da plataforma ChatGPT nem do Windows: bloqueios do cliente MCP, UAC, filtros de pastas protegidas, listas de comandos permitidos, limites de tamanho e verificacoes de SHA permanecem.
+- Comandos com `root_id` continuam exigindo cadastro explicito da pasta no painel; nao existe elevacao implicita do acesso ao projeto.
+- `atualizacao_solicitar` permanece protegida por uma permissao **independente**, `remote_approved`, escolhida no proprio painel. Nao se habilita atualizacao remota de executaveis apenas por usar o modo maximo.
+- Selecionar um navegador/perfil ainda e uma preferencia explicita e separada; nao se assume o perfil pessoal automaticamente.
+- Se o ChatGPT bloquear uma acao no cliente antes que ela chegue ao MCP, a alteracao do Consecom nao tem como remover esse bloqueio.
+
+- Ao ativar o modo maximo, pedidos antigos de aprovacao local de outros modos sao **cancelados, jamais executados automaticamente**. Reenvie a acao que deseja executar. Um pedido de atualizacao remota permanece pendente por usar uma permissao separada.
