@@ -180,7 +180,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-info{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:9px;color:#8aa9ba;font-size:11px}
 .live-chat-status{white-space:pre-wrap;max-width:100%}
 @media(max-width:680px){.live-chat-stream{padding:13px;max-height:400px}.live-chat-row{max-width:92%}.live-chat-editor{align-items:stretch}.live-chat-editor textarea{width:100%}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.1 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
 <h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p></div></div>
@@ -257,6 +257,7 @@ async function refreshConsecomChat(force=false){
   liveChatSignature=sig;
   const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<90;
   const fragment=document.createDocumentFragment();
+  const sentAt=new Map(messages.filter(m=>m.role==="user").map(m=>[m.event_id,Date.parse(m.created_at)]));
   if(messages.length===0){
    fragment.append(dom('div','Escreva sua primeira mensagem. As respostas do ChatGPT aparecerão aqui, sem API paga.','live-chat-empty'));
   }
@@ -267,7 +268,10 @@ async function refreshConsecomChat(force=false){
    let stamp='';
    try{stamp=new Date(entry.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}catch(e){}
    const who=entry.role==='user'?'Você':entry.kind==='andamento'?'ChatGPT · trabalhando':'ChatGPT';
-   meta.append(dom('span',who),dom('span',stamp+(entry.role==='user'?' · '+(liveDeliveryNames[entry.status]||entry.status):'')));
+   const startTime=sentAt.get(entry.event_id),endTime=Date.parse(entry.created_at);
+   const elapsed=entry.role==='assistant'&&Number.isFinite(startTime)&&Number.isFinite(endTime)&&endTime>=startTime?
+      ' · '+Math.round((endTime-startTime)/1000)+'s desde envio':'';
+   meta.append(dom('span',who),dom('span',stamp+(entry.role==='user'?' · '+(liveDeliveryNames[entry.status]||entry.status):elapsed)));
    row.append(msg,meta);
    if(entry.role==='user'&&entry.status==='host_rejected'){
     const retry=dom('button','Reenviar mensagem');retry.onclick=()=>retryConsecomMessage(entry.id);retry.style.marginTop='8px';row.append(retry);
@@ -296,7 +300,7 @@ if(liveComposeInput)liveComposeInput.addEventListener('keydown',function(e){
   void sendConsecomMessage();
  }
 });
-setInterval(()=>{if(activePage==='panel')void refreshConsecomChat()},1800);
+setInterval(()=>{if(activePage==='panel'&&!document.hidden)void refreshConsecomChat()},900);
 void refreshConsecomChat(true);
 async function waitForPluginRestart(previousVersion){const until=Date.now()+90000;while(Date.now()<until){await new Promise(resolve=>setTimeout(resolve,1000));try{const r=await fetch('/health?updated='+Date.now(),{cache:'no-store'});if(!r.ok)continue;const body=await r.json();if(body.service==='consecom-mcp'&&body.version!==previousVersion){location.replace('/?updated='+Date.now());return}}catch(e){}}mark('updateSummary','Atualização iniciada. Reabra o painel se ele não reconectar.')}
 async function updateNow(){const btn=document.getElementById('sideUpdateBtn');if(btn.disabled)return;btn.disabled=true;btn.textContent='↻ Verificando...';mark('updateSummary','Buscando atualização oficial...');const previousVersion=state.updates?.version||'';try{let r=(await api('updates/local',{})).result;if(r.status==='sem_atualizacao'){toast('Consecom já está na última versão ('+r.latest+')');mark('updateSummary','Você já está atualizado')}else if(r.status==='iniciada'){toast(r.message||'Instalador validado e iniciado');mark('updateSummary','Aguardando reinício para recarregar o painel...');waitForPluginRestart(previousVersion)}else{toast(r.message||'Atualização solicitada');mark('updateSummary','Aguardando atualização')}}catch(e){toast(e.message,true);mark('updateSummary','Falha: '+e.message)}finally{btn.disabled=false;btn.textContent='↻ Atualizar'}}
