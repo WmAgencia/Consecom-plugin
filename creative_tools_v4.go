@@ -15,6 +15,7 @@ type CreativeProgram struct{
  Name string `json:"name"`
  Available bool `json:"available"`
  Executable string `json:"executable,omitempty"`
+ Version string `json:"version,omitempty"`
  Purpose string `json:"purpose"`
 }
 func creativeTools()(any,error){
@@ -44,9 +45,16 @@ func creativeTools()(any,error){
     if item.Available{break}
    }
   }
+  if item.Available{
+   version,verifyErr:=verifyCreativeProgram(item.Name,item.Executable)
+   if verifyErr!=nil{
+    item.Available=false
+    item.Executable=""
+   }else{item.Version=version}
+  }
   list=append(list,item)
  }
- return map[string]any{"programs":list,"note":"Remotion e uma dependencia por projeto npm; Node instalado nao significa Remotion instalado"},nil
+ return map[string]any{"programs":list,"note":"Programas verificados por --version; aliases WindowsApps nao contam como instalacao. Remotion e dependencia por projeto npm."},nil
 }
 func (a *App) inspectVideo(rootID,relative string)(any,error){
  root,e:=a.getRoot(rootID);if e!=nil{return nil,e}
