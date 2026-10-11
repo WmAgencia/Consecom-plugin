@@ -28,7 +28,7 @@ func TestTaskInboxPersistenceAndBuiltin(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("esperado 2, got %d", len(items))
 	}
-	if items[0].ID != diag.ID || items[0].Status != "concluida" || !strings.Contains(items[0].Result, "2.7.0") {
+	if items[0].ID != diag.ID || items[0].Status != "concluida" || !strings.Contains(items[0].Result, "2.7.1") {
 		t.Fatalf("versao nao resolvida: %#v", items[0])
 	}
 	if items[1].ID != free.ID || items[1].Status != "pendente" {
