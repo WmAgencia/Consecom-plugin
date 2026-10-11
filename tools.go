@@ -79,6 +79,13 @@ func tools() []Tool {
 		{"git_patch_aplicar","Solicitar aprovacao local para aplicar patch de texto e executar testes opcionais; rollback se testes falharem.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff Git"),"teste":map[string]any{"type":"string","enum":[]string{"none","go_test","npm_test","npm_lint"}}},"root_id","patch"),mutating},
 		{"git_patch_reverter","Solicitar aprovacao para reverter patch realizado pelo Consecom, sem sobrescrever outras edicoes.",schema(map[string]any{"id":str("ID do patch salvo")},"id"),mutating},
 		{"git_branch_criar","Solicitar aprovacao para criar branch Git dentro de projeto autorizado.",schema(map[string]any{"root_id":str("ID do projeto"),"nome":str("Nome da branch")},"root_id","nome"),mutating},
+		{"desktop_janelas","Listar somente janelas visiveis de aplicativos nao protegidos, sem interagir.",schema(map[string]any{}),readonly},
+		{"desktop_abrir","Solicitar aprovacao local para abrir um app permitido.",schema(map[string]any{"app":map[string]any{"type":"string","enum":[]string{"notepad","calculator","explorer","vscode"}}},"app"),mutating},
+		{"desktop_ativar","Solicitar aprovacao local para ativar uma janela visivel.",schema(map[string]any{"window":str("ID numerico da janela como string")},"window"),mutating},
+		{"desktop_clicar","Solicitar aprovacao local para clicar dentro da janela.",schema(map[string]any{"window":str("ID da janela"),"x":map[string]any{"type":"integer"},"y":map[string]any{"type":"integer"}},"window","x","y"),mutating},
+		{"desktop_digitar","Solicitar aprovacao local para digitar texto em janela visivel nao protegida.",schema(map[string]any{"window":str("ID da janela"),"texto":str("Texto de ate 1000 caracteres")},"window","texto"),mutating},
+		{"desktop_capturar","Solicitar aprovacao local para capturar janela selecionada.",schema(map[string]any{"window":str("ID da janela")},"window"),mutating},
+		{"desktop_ultima_captura","Ler captura de janela explicitamente aprovada nos ultimos cinco minutos.",schema(map[string]any{}),readonly},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -123,6 +130,19 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		n,e:=argStr(args,"nome");if e!=nil{return nil,e}
 		return a.gitBranchRequest(id,n)
+	case "desktop_janelas":
+		return desktopEntries()
+	case "desktop_ultima_captura":
+		return desktopLatestCapture()
+	case "desktop_abrir","desktop_ativar","desktop_clicar","desktop_digitar","desktop_capturar":
+		item,e:=desktopArg(args);if e!=nil{return nil,e}
+		switch name{
+		case "desktop_abrir": return a.desktopRequest("open",item)
+		case "desktop_ativar": return a.desktopRequest("activate",item)
+		case "desktop_clicar": return a.desktopRequest("click",item)
+		case "desktop_digitar": return a.desktopRequest("type",item)
+		default: return a.desktopRequest("capture",item)
+		}
 	case "dev_execucao":
 		rootID, e := argStr(args, "root_id")
 		if e != nil {
@@ -406,6 +426,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.gitPatchRollbackApproved(p)
 	case "gitbranch":
 		return a.gitBranchApproved(p)
+	case "desktop":
+		return a.approveDesktop(p)
 	case "close":
 		errs := []string{}
 		for _, t := range p.Processes {
