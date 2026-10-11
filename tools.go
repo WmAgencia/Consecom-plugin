@@ -39,6 +39,9 @@ func tools() []Tool {
 		{"politica_aprovacao", "Informar modo efetivo de aprovacao do Consecom, prompts locais, quantidade de projetos autorizados e as permissoes que continuam independentes (cliente MCP, UAC, atualizacoes).", schema(map[string]any{}), readonly},
 		{"dev_integracoes_status","Diagnosticar disponibilidade local de Git, GitHub CLI, Node/npm, Vercel, Supabase e Railway sem ler credenciais, arquivos .env ou autenticar nas contas. O ChatGPT usa os conectores cloud separadamente.",schema(map[string]any{}),readonly},
 		{"dev_projeto_inspecionar","Identificar framework, scripts npm (somente nomes) e configuracao Git/Vercel/Supabase/Railway em uma pasta de projeto autorizada, sem ler segredos nem executar scripts.",schema(map[string]any{"root_id":str("ID da pasta de projeto autorizada no painel Consecom")},"root_id"),readonly},
+		{"dev_servicos_associar","Associar IDs GitHub/Vercel/Supabase/Railway a uma pasta de projeto, SEM chaves ou alteracoes remotas. Modo maximo executa diretamente.",schema(map[string]any{"root_id":str("Projeto local autorizado"),"github_repository":str("owner/repo"),"vercel_project_id":str("ID do projeto Vercel opcional"),"vercel_team_id":str("ID do team Vercel opcional"),"supabase_project_ref":str("Ref Supabase opcional"),"railway_project_id":str("ID Railway opcional"),"environment":map[string]any{"type":"string","enum":[]string{"preview","production"}}},"root_id","github_repository","environment"),mutating},
+		{"dev_servicos_inspecionar","Consultar vinculos locais dos projetos GitHub/Vercel/Supabase/Railway sem credenciais; nao valida acesso remoto.",schema(map[string]any{"root_id":str("Projeto local autorizado")},"root_id"),readonly},
+		{"dev_deploy_preflight","Verificar Git clean, projeto autorizado e vinculos de destino antes de um deploy pelas ferramentas oficiais ChatGPT. Nao publica nada nem acessa chaves.",schema(map[string]any{"root_id":str("Projeto local autorizado")},"root_id"),readonly},
 		{"listar_arquivos", "Listar ate 120 arquivos de texto e diretorios de uma pasta autorizada, sem caminhos confidenciais.", schema(map[string]any{"root_id": str("ID da pasta autorizada"), "caminho": str("Caminho relativo, como src ou src/components")}, "root_id", "caminho"), readonly},
 		{"ler_arquivo", "Ler somente arquivo UTF-8 de ate 64 KiB na pasta autorizada; segredos e arquivos ocultos sensiveis bloqueados.", schema(map[string]any{"root_id": str("ID da pasta autorizada"), "caminho": str("Caminho relativo do arquivo")}, "root_id", "caminho"), readonly},
 		{"terminal_restrito", "Executar somente comandos diagnosticos preaprovados: windows_version, git_status, git_branch, git_log; sem interpretador de comandos livre.", schema(map[string]any{"acao": map[string]any{"type": "string", "enum": []string{"windows_version", "git_status", "git_branch", "git_log"}}, "root_id": str("ID do projeto para comandos git (obrigatorio com git)")}, "acao"), readonly},
@@ -67,6 +70,8 @@ func tools() []Tool {
 		{"browser_digitar", "Preencher input, textarea ou contenteditable por seletor CSS. Bloqueia senhas e cartoes; nao envia o formulario.", schema(map[string]any{"seletor": str("Seletor CSS do campo"), "texto": str("Texto a digitar, ate 4096 caracteres")}, "seletor", "texto"), mutating},
 		{"browser_rolar", "Rolar a aba controlada verticalmente ate 2500 pixels por chamada.", schema(map[string]any{"pixels": map[string]any{"type": "integer", "minimum": -2500, "maximum": 2500}}), mutating},
 		{"browser_capturar_tela", "Captura uma imagem JPEG da aba controlada e envia ao ChatGPT. Pode conter dados privados visiveis na tela; use somente mediante pedido de visualizacao.", schema(map[string]any{}), readonly},
+		{"browser_qa_auditar","Auditar SEO e acessibilidade estrutural na aba pertencente ao Consecom: title, meta, H1, imagens quebradas, campos sem rotulo e overflow. Nao le credenciais.",schema(map[string]any{}),readonly},
+		{"browser_qa_responsivo","Capturar e inspecionar aba controlada em tamanhos mobile/tablet/desktop e restaurar o viewport original; screenshots podem incluir dados pessoais visiveis.",schema(map[string]any{"viewport":map[string]any{"type":"string","enum":[]string{"mobile","tablet","desktop"}}},"viewport"),readonly},
 		{"browser_fechar_aba", "Fechar apenas a aba criada/controlada pelo Consecom, sem fechar seu navegador pessoal.", schema(map[string]any{}), mutating},
 		{"dev_execucao", "Executar comandos fixos de desenvolvimento dentro de projeto autorizado. npm test/build/lint exigem aprovacao em modo normal/categoria; no modo maximo executam diretamente, com timeout e validacao de escopo.", schema(map[string]any{"root_id": str("ID da pasta de projeto autorizada"), "acao": map[string]any{"type": "string", "enum": []string{"git_status", "git_branch", "git_diff_stat", "git_log", "node_version", "npm_version", "npm_test", "npm_build", "npm_lint"}}}, "root_id", "acao"), mutating},
 		{"browser_abas", "Lista SOMENTE abas criadas pelo Consecom na sessao controlada; nunca assume abas pessoais existentes.", schema(map[string]any{}), readonly},
@@ -84,8 +89,10 @@ func tools() []Tool {
 		{"dev_preview_listar","Listar servidores de desenvolvimento iniciados pelo Consecom nesta execucao.",schema(map[string]any{}),readonly},
 		{"dev_preview_parar","Encerrar o processo e descendentes da previa local iniciada pelo Consecom.",schema(map[string]any{"id":str("ID da previa")},"id"),mutating},
 		{"dev_preview_verificar","Verificar a resposta HTTP local e metadados basicos da pagina do servidor de previa, sem navegar na internet ou executar scripts.",schema(map[string]any{"id":str("ID da previa")},"id"),readonly},
+		{"dev_reparo_planejar","Gerar um plano de verificacoes npm lint/test/build ou Go test/build com base nos scripts existentes na pasta autorizada, sem executar comandos.",schema(map[string]any{"root_id":str("ID do projeto autorizado")},"root_id"),readonly},
+		{"dev_reparo_iniciar","Executar sequencia de validacao do projeto com workflow existente e logs por etapa; modo maximo executa sem confirmacao Consecom. O ChatGPT prepara os patches e verifica o rollback.",schema(map[string]any{"root_id":str("ID do projeto autorizado")},"root_id"),mutating},
 		{"git_patch_validar","Verificar patch de texto em projeto autorizado sem modificar arquivos.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff unificado no formato Git, max 30KB")},"root_id","patch"),readonly},
-		{"git_patch_aplicar","Aplicar patch de texto com testes e rollback; no modo maximo executa sem aprovacoes repetidas.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff Git"),"teste":map[string]any{"type":"string","enum":[]string{"none","go_test","npm_test","npm_lint"}}},"root_id","patch"),mutating},
+		{"git_patch_aplicar","Aplicar patch de texto com testes e rollback; no modo maximo executa sem aprovacoes repetidas.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff Git"),"teste":map[string]any{"type":"string","enum":[]string{"none","go_test","npm_test","npm_lint","npm_build","npm_quality"}}},"root_id","patch"),mutating},
 		{"git_patch_reverter","Reverter patch registrado pelo Consecom; execucao direta no modo maximo.",schema(map[string]any{"id":str("ID do patch salvo")},"id"),mutating},
 		{"git_branch_criar","Criar branch Git em projeto autorizado; execucao direta no modo maximo.",schema(map[string]any{"root_id":str("ID do projeto"),"nome":str("Nome da branch")},"root_id","nome"),mutating},
 		{"desktop_janelas","Listar somente janelas visiveis de aplicativos nao protegidos, sem interagir.",schema(map[string]any{}),readonly},
@@ -323,6 +330,11 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.updateCheck()
 	case "atualizacao_solicitar":
 		return a.updateRequest()
+	case "browser_qa_auditar":
+		return a.browserQATool(name,"")
+	case "browser_qa_responsivo":
+		viewport,e:=argStr(args,"viewport");if e!=nil{return nil,e}
+		return a.browserQATool(name,viewport)
 	case "browser_opcoes", "browser_abrir", "browser_navegar", "browser_ler_pagina", "browser_clicar", "browser_digitar", "browser_rolar", "browser_capturar_tela", "browser_fechar_aba", "browser_abas", "browser_nova_aba", "browser_ativar_aba":
 		return a.browserCommand(name, args)
 	case "agentes_ativos":
@@ -399,6 +411,18 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.approvalPolicy(), nil
 	case "dev_integracoes_status":
 		return localDevStackStatus(a)
+	case "dev_reparo_planejar","dev_reparo_iniciar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		if name=="dev_reparo_planejar"{return a.repairPlan(id)}
+		return a.repairStart(id)
+	case "dev_servicos_associar":
+		var b DevServiceBinding
+		if e:=json.Unmarshal(raw,&b);e!=nil{return nil,e}
+		return a.serviceBindingSave(b,false)
+	case "dev_servicos_inspecionar","dev_deploy_preflight":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		if name=="dev_servicos_inspecionar"{return a.serviceBindingGet(id)}
+		return a.deployPreflight(id)
 	case "dev_projeto_inspecionar":
 		rootID,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		return a.devProjectInspect(rootID)
@@ -593,6 +617,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveDevJob(p)
 	case "devpreview":
 		return a.previewApproved(p)
+	case "devbinding":
+		return a.serviceBindingApproved(p)
 	case "gitpatch":
 		return a.gitPatchApproved(p)
 	case "gitrollback":
