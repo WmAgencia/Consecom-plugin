@@ -72,6 +72,25 @@ func tools() []Tool {
 		{"atualizacao_verificar", "Consulta releases do repositório GitHub confiável cadastrado localmente; não instala nada.", schema(map[string]any{}), readonly},
 		{"atualizacao_solicitar", "SOLICITA INSTALAR atualização de um release confiável do GitHub. Verifica SHA-256; exige confirmação no painel, exceto se o usuário habilitou atualizações remotas desse repositório. Reinicia Consecom e pode interromper o túnel temporariamente.", schema(map[string]any{}), map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}},
 
+		{"dev_job_iniciar","Iniciar comando de desenvolvimento de uma lista permitida, com limite de tempo, log e aprovacao local para builds/scripts.",schema(map[string]any{"root_id":str("Pasta de projeto autorizada"),"acao":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}},"root_id","acao"),mutating},
+		{"dev_job_status","Consultar status e log parcial de uma execucao por ID.",schema(map[string]any{"id":str("ID de execucao")},"id"),readonly},
+		{"dev_job_cancelar","Solicitar cancelamento de uma execucao em andamento.",schema(map[string]any{"id":str("ID de execucao")},"id"),mutating},
+		{"git_patch_validar","Verificar patch de texto em projeto autorizado sem modificar arquivos.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff unificado no formato Git, max 30KB")},"root_id","patch"),readonly},
+		{"git_patch_aplicar","Solicitar aprovacao local para aplicar patch de texto e executar testes opcionais; rollback se testes falharem.",schema(map[string]any{"root_id":str("ID do projeto"),"patch":str("Diff Git"),"teste":map[string]any{"type":"string","enum":[]string{"none","go_test","npm_test","npm_lint"}}},"root_id","patch"),mutating},
+		{"git_patch_reverter","Solicitar aprovacao para reverter patch realizado pelo Consecom, sem sobrescrever outras edicoes.",schema(map[string]any{"id":str("ID do patch salvo")},"id"),mutating},
+		{"git_branch_criar","Solicitar aprovacao para criar branch Git dentro de projeto autorizado.",schema(map[string]any{"root_id":str("ID do projeto"),"nome":str("Nome da branch")},"root_id","nome"),mutating},
+		{"desktop_janelas","Listar somente janelas visiveis de aplicativos nao protegidos, sem interagir.",schema(map[string]any{}),readonly},
+		{"desktop_abrir","Solicitar aprovacao local para abrir um app permitido.",schema(map[string]any{"app":map[string]any{"type":"string","enum":[]string{"notepad","calculator","explorer","vscode"}}},"app"),mutating},
+		{"desktop_ativar","Solicitar aprovacao local para ativar uma janela visivel.",schema(map[string]any{"window":str("ID numerico da janela como string")},"window"),mutating},
+		{"desktop_clicar","Solicitar aprovacao local para clicar dentro da janela.",schema(map[string]any{"window":str("ID da janela"),"x":map[string]any{"type":"integer"},"y":map[string]any{"type":"integer"}},"window","x","y"),mutating},
+		{"desktop_digitar","Solicitar aprovacao local para digitar texto em janela visivel nao protegida.",schema(map[string]any{"window":str("ID da janela"),"texto":str("Texto de ate 1000 caracteres")},"window","texto"),mutating},
+		{"desktop_capturar","Solicitar aprovacao local para capturar janela selecionada.",schema(map[string]any{"window":str("ID da janela")},"window"),mutating},
+		{"desktop_ultima_captura","Ler captura de janela explicitamente aprovada nos ultimos cinco minutos.",schema(map[string]any{}),readonly},
+		{"browser_habilitar_downloads","Permitir downloads apenas na pasta privada do Consecom; exige navegador controlado.",schema(map[string]any{}),mutating},
+		{"browser_downloads","Listar downloads concluídos da pasta privada sem ler seus conteudos.",schema(map[string]any{}),readonly},
+		{"browser_upload_arquivo","Solicitar aprovacao local para selecionar arquivo autorizado em campo de upload do site; nao envia formulario.",schema(map[string]any{"root_id":str("ID da pasta"),"caminho":str("Arquivo relativo"),"seletor":str("Seletor CSS do input[type=file]")},"root_id","caminho","seletor"),mutating},
+		{"browser_confirmar_acao","Solicitar aprovacao local para clique que envia, publica ou exclui no site.",schema(map[string]any{"seletor":str("Seletor CSS do botao")},"seletor"),mutating},
+		{"browser_download_copiar","Solicitar aprovacao local para copiar download privado ao projeto, sem sobrescrever.",schema(map[string]any{"nome":str("Nome do download"),"root_id":str("ID da pasta"),"destino":str("Destino relativo")},"nome","root_id","destino"),mutating},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -94,6 +113,58 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		}
 	}
 	switch name {
+	case "dev_job_iniciar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
+		return a.devJobStart(id,action,false)
+	case "dev_job_status":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.devJobStatus(id)
+	case "dev_job_cancelar":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.devJobCancel(id)
+	case "git_patch_validar","git_patch_aplicar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		patch,e:=argStr(args,"patch");if e!=nil{return nil,e}
+		if name=="git_patch_validar"{return a.gitPatchCheck(id,patch)}
+		return a.gitPatchRequest(id,patch,optionalString(args,"teste"))
+	case "git_patch_reverter":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.gitPatchRollbackRequest(id)
+	case "git_branch_criar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		n,e:=argStr(args,"nome");if e!=nil{return nil,e}
+		return a.gitBranchRequest(id,n)
+	case "desktop_janelas":
+		return desktopEntries()
+	case "desktop_ultima_captura":
+		return desktopLatestCapture()
+	case "desktop_abrir","desktop_ativar","desktop_clicar","desktop_digitar","desktop_capturar":
+		item,e:=desktopArg(args);if e!=nil{return nil,e}
+		switch name{
+		case "desktop_abrir": return a.desktopRequest("open",item)
+		case "desktop_ativar": return a.desktopRequest("activate",item)
+		case "desktop_clicar": return a.desktopRequest("click",item)
+		case "desktop_digitar": return a.desktopRequest("type",item)
+		default: return a.desktopRequest("capture",item)
+		}
+	case "browser_habilitar_downloads":
+		return a.browserEnableDownloads()
+	case "browser_downloads":
+		return a.browserDownloads()
+	case "browser_upload_arquivo":
+		root,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		selector,e:=argStr(args,"seletor");if e!=nil{return nil,e}
+		return a.browserUploadRequest(root,path,selector)
+	case "browser_confirmar_acao":
+		selector,e:=argStr(args,"seletor");if e!=nil{return nil,e}
+		return a.browserSensitiveRequest(selector)
+	case "browser_download_copiar":
+		name,e:=argStr(args,"nome");if e!=nil{return nil,e}
+		root,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"destino");if e!=nil{return nil,e}
+		return a.browserDownloadCopyRequest(name,root,path)
 	case "dev_execucao":
 		rootID, e := argStr(args, "root_id")
 		if e != nil {
@@ -369,6 +440,20 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveUpdate(p)
 	case "dev":
 		return a.approveDeveloper(p)
+	case "devjob":
+		return a.approveDevJob(p)
+	case "gitpatch":
+		return a.gitPatchApproved(p)
+	case "gitrollback":
+		return a.gitPatchRollbackApproved(p)
+	case "gitbranch":
+		return a.gitBranchApproved(p)
+	case "desktop":
+		return a.approveDesktop(p)
+	case "browserupload","browserconfirm":
+		return a.approveBrowserTransfer(p)
+	case "browsercopy":
+		return a.approveBrowserCopy(p)
 	case "close":
 		errs := []string{}
 		for _, t := range p.Processes {
