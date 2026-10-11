@@ -98,6 +98,11 @@ func NewApp(path string) (*App, error) {
 	} else {
 		return nil, e
 	}
+ // Migration: old personal Chrome defaults must not trigger remote-debugging prompts.
+ if p:=exclusiveBrowserPreference(a.cfg.Browser);p.Browser!=""&&p!=a.cfg.Browser{
+  a.cfg.Browser=p
+  if e:=a.saveLocked();e!=nil{return nil,e}
+ }
 	return a, nil
 }
 func (a *App) saveLocked() error {
