@@ -132,3 +132,28 @@ Passos para desenvolver um site:
 6. Use o conector Railway para projetos, servicos, ambientes, variaveis e deployments quando precisar de backend/worker.
 
 O plugin **nao** promete acesso irrestrito a contas desconhecidas, nao le nem salva tokens dos provedores, nao executa \`git push\` ou um deploy sem fluxo explicitamente solicitado e nao substitui permissoes dos conectores, escopos de equipe, autenticacao e UAC. Para uma execucao local independente do ChatGPT, autentique as CLIs em seu proprio PC pelos fluxos oficiais dos provedores; a verificacao de instalacao nao significa sessao autenticada.
+
+
+### 4.4.0 PREVIEW — Servidor de desenvolvimento local persistente
+
+Cinco ferramentas MCP em preview: `dev_preview_iniciar`, `dev_preview_status`, `dev_preview_listar`, `dev_preview_parar`, `dev_preview_verificar`.
+
+- O usuario cadastra uma **pasta especifica** de projeto Node com permissao de escrita no painel Consecom e instala dependencias (`node_modules`). O software nao instala pacotes automaticamente.
+- So aceita projetos com `package.json`, script `dev` e dependencia identificada como Next.js, Vite ou Astro. O script pode executar codigo arbitrario do **proprio projeto**; somente pastas cadastradas executam codigo.
+- Inicia `npm run dev` com flags fixas (framework conhecido) e host `127.0.0.1` / porta selecionada entre 1024 e 65535. Nenhum comando ou caminho arbitrario entra no shell.
+- Limite de **2 servidores simultaneos**. Sessao de no maximo **60 minutos**; encerra processo e descendentes pelo Windows. Os previews sao **efemeros**: nao sobrevivem a reinicio do Consecom.
+- Nos modos com aprovacao local, o primeiro start exige aprovacao no painel; em modo `maximum`, executa sem novo prompt local.
+- `dev_preview_verificar` faz apenas um GET HTTP no URL loopback criado pela propria sessao, com 4 s de timeout, limite de 1 MiB, sem seguir redirects, retornando status/Content-Type/presenca de title, viewport, description e h1. **Nao e um teste Lighthouse ou Playwright.**
+- Nao le arquivos `.env`, nem devolve logs brutos de processo ao ChatGPT (scripts do projeto podem emitir segredos). Para inspecionar erros, use testes de build/lint aprovados e logs locais sob seu controle.
+
+**Atenção:** esta etapa e um prototipo de ferramenta para desenvolvimento pessoal, nao uma promessa de servidores publicos em producao. Testar no Windows real antes de colocar em planos pagos; verificar politica de encerramento de subprocessos em casos de falha/reinicio do serviço.
+
+
+### 4.5.0 — Visual QA + ciclo de reparo assistido + preflight cloud
+
+Esta versao evolui as tres etapas em cima do servidor de previa v4.4.0. Ferramentas novas:
+- **Inspecao visual:** \`browser_qa_auditar\` devolve problemas DOM estruturais de SEO/acessibilidade/overflow/imagens. \`browser_qa_responsivo\` captura mobile/tablet/desktop via Chrome DevTools Protocol e **restaura viewport**. \`browser_qa_instrumentar\` registra apenas categorias de console.error, erros e promessas rejeitadas na aba controlada; \`browser_qa_erros\` devolve contagens. A captura visual requer aba criada/controlada pelo Consecom; nao acessa outras abas. A coleta de categorias de erros deve ser ativada **antes** das interacoes a observar. Screenshot pode conter dados pessoais visiveis.
+- **Ciclo de reparo:** \`dev_reparo_planejar\` identifica os scripts \`lint\`, \`test\`, \`build\` de \`package.json\` ou comandos Go. \`dev_reparo_iniciar\` executa sequencia de verificacoes por \`fluxo_iniciar\`, com monitoramento por \`fluxo_status\`. O ChatGPT interpreta as falhas e prepara diffs de codigo; \`git_patch_validar\`/\`git_patch_aplicar\` verificam o patch. Novo teste \`npm_quality\` executa lint/test/build e **reverte automaticamente o patch** se qualquer teste falhar. Nenhum modelo AI escondido executa arbitrariamente codigo ou gera patches sem ChatGPT.
+- **Vinculos para deploy:** \`dev_servicos_associar\` armazena apenas identificadores de repositorio GitHub, projeto/equipe Vercel, ref Supabase, projeto Railway e ambiente do workspace. \`dev_servicos_inspecionar\` consulta a associacao e \`dev_deploy_preflight\` verifica pasta autorizada, Git status limpo e destinos definidos. Os IDs fornecidos **nao sao validados remotamente pelo plugin**: o ChatGPT deve verificá-los pelos conectores GitHub/Vercel/Supabase/Railway e usar seus respectivos escopos para deploy. Nenhuma chave, token ou .env e lida, persistida ou transferida. O Consecom **nao executa deploy em nuvem autonomamente** e o ambiente production exige revisao independente.
+
+Limites atuais e proximos passos: Browser QA e baseado em CDP e nao substitui Lighthouse, axe-core nem suite Playwright completa. Pipeline de reparo e assistido pelo ChatGPT, nao um agente LLM independente rodando em background. Vinculos cloud sao referencias e preflight local, nao autenticação ou deploy; os conectores oficiais realizam as acoes depois que o ChatGPT valida os destinos. Testes de integracao no computador real exigem cadastrar um projeto temporario no painel local. Sem isso, apenas os testes do GitHub Actions Windows estao disponiveis.

@@ -22,6 +22,7 @@ type Root struct {
 type Config struct {
 	Token         string            `json:"token"`
 	Roots         []Root            `json:"roots"`
+	DevBindings   []DevServiceBinding `json:"dev_bindings,omitempty"`
 	PreviousPower string            `json:"previous_power,omitempty"`
 	ChangedPower  string            `json:"changed_power,omitempty"`
 	ApprovalMode  string            `json:"approval_mode,omitempty"`
@@ -39,6 +40,7 @@ type App struct {
 	agents         map[string]*Agent
 	browserControl BrowserControl
 	devJobs DevJobManager
+	devPreviews DevPreviewManager
 	workflows WorkflowManager
 	renders RenderManager
 }
