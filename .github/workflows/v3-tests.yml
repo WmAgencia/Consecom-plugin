@@ -1,0 +1,30 @@
+name: Testes de desenvolvimento v3
+on:
+  push:
+    branches:
+      - feature/consecom-v3-release
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-v3:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Preparar executavel local
+        shell: pwsh
+        run: |
+          go build -trimpath -o installer/payload/MCP-PC.exe .
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: Testes Windows
+        shell: pwsh
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP "consecom-v3"
+          New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+          $env:TEMP = $tmp
+          $env:TMP = $tmp
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { exit 1 }
