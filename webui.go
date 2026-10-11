@@ -110,11 +110,41 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 @media(max-width:900px){#contextPage{height:calc(100dvh - 120px);min-height:560px}#contextPage .integration-card{flex-basis:205px}#contextPage .graph-actions input{width:140px}}
 @media(max-width:500px){#contextPage .graph-actions input{width:110px}#contextPage .graph-actions button{font-size:14px;padding:5px}#contextPage .context-graph-caption span:last-child{display:none}}
 
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.10.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+
+/* 4.11 — compact autonomy control and exclusive browser switcher */
+.approval-compact{max-width:590px;padding:11px 6px 5px}
+.approval-levels{display:flex;justify-content:space-between;gap:5px;margin-bottom:8px}
+.approval-levels button{flex:1;min-width:0;text-align:center;border:1px solid #28435a;border-radius:9px;background:#101f31;font-size:11px;font-weight:600;line-height:1.3;padding:8px 4px;color:#91adc4}
+.approval-levels button.selected{border-color:#3fc5a3;color:#dcfff4;background:#174537}
+#modeSlider{display:block;width:100%;margin:8px 0;accent-color:#2dd6aa;cursor:pointer;min-height:27px}
+.approval-status{display:flex;justify-content:space-between;align-items:center;gap:14px;font-size:12px;color:#a2c3cf}
+.approval-status span{font-weight:700;color:#daf7ec}.approval-status small{font-size:11px;text-align:right;color:#94aebc}
+.exclusive-browser-choice{display:flex;gap:9px;flex-wrap:wrap;padding:10px 0 12px}
+.exclusive-browser-choice button{flex:1;min-width:160px;padding:13px 15px}
+.exclusive-browser-choice button.selected{border-color:#37d6a9;background:#104d3d;box-shadow:inset 0 0 0 1px #2ac391}
+
+/* Obsidian-like graph with index summary and subdued file node labels */
+#contextPage .context-index-status{position:absolute;top:14px;right:15px;z-index:4;padding:10px 14px;min-width:180px;max-width:260px;background:#101923e8;border:1px solid #354557;border-radius:13px;display:flex;flex-direction:column;gap:3px;backdrop-filter:blur(10px);pointer-events:none}
+#contextIndexCount{font-size:13px;color:#ccece9;letter-spacing:-.1px}
+#contextIndexSubtitle{font-size:10px;color:#90a9bb}
+#contextPage .context-graph-infinite{background-color:#0e1117;background-image:radial-gradient(#293440 0.65px,transparent .65px);background-size:27px 27px;border-color:#2a3341}
+#contextPage .context-edge{stroke:#64758b;stroke-width:.9;opacity:.22}
+#contextPage .context-node.indexed-file circle{stroke:#9bb8c0aa;stroke-width:.4}
+#contextPage .context-node.indexed-file text{opacity:0;font-size:10px;transition:opacity .2s}
+#contextPage .context-node.indexed-file:hover text,#contextPage .context-node.indexed-file:focus text{opacity:1}
+#contextPage .context-node.indexed-folder circle{stroke:#d1bfff8a;stroke-width:1.4;filter:drop-shadow(0 0 8px #836dd533)}
+#contextPage .context-node.indexed-folder text{font-size:12px;fill:#d6cdf5;font-weight:650}
+#contextPage .context-node.vault circle{filter:drop-shadow(0 0 12px #927adb77)}
+#contextPage .context-node.app circle{filter:drop-shadow(0 0 7px #81dccb50)}
+#contextPage .context-graph-preview{background:#151b25f7;border-color:#4b5167}
+#contextPage .context-graph-settings{background:#171d28f6;border-color:#394659}
+@media(max-width:850px){#contextPage .context-index-status{right:10px;top:67px;padding:8px 11px;min-width:140px}#contextIndexCount{font-size:11px}}
+
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.11.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header>
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
-<div class="columns"><section class="panel"><div class="panelheader"><span class="section-icon">⬡</span><div><h2>Modo de aprovação e permissões</h2><div class="muted">Decida quando autorizar ações solicitadas pelo ChatGPT.</div></div></div><div class="choices"><button class="choice" id="modeAlways" onclick="setMode('always')"><span class="symbol">☏</span><strong>Perguntar sempre</strong><small>Confirma cada alteração no computador.</small></button><button class="choice" id="modeCategory" onclick="setMode('category')"><span class="symbol">☷</span><strong>Aprovar por categoria</strong><small>Gravação em projetos autorizados sem perguntas repetidas.</small></button><button class="choice" id="modeMaximum" onclick="setMode('maximum')"><span class="symbol">♛</span><strong>Aprovação máxima</strong><small>Executa automaticamente as ferramentas permitidas, inclusive Windows, terminal, Git e navegador. Restrições técnicas continuam.</small></button></div><div id="pendingWrap" class="hidden" style="margin-top:16px;padding:12px;background:#122c40;border:1px solid #3d5d73;border-radius:11px"><b id="pendingTitle">Aprovações pendentes</b><div id="pendingList"></div></div></section><section class="panel"><div class="panelheader"><span class="section-icon">▣</span><div><h2>Escopo de acesso</h2><div class="muted">Arquivos e projetos disponíveis pelas permissões escolhidas.</div></div></div><div class="scope"><span class="scope-icon">📁</span><div><strong id="scopeTitle">Pastas aprovadas</strong><p id="scopeDesc">Carregando permissões...</p></div></div><div class="scopeextra" id="scopeActions"><button onclick="openModal('folders')">Gerenciar pastas aprovadas</button></div></section></div>
-<section class="panel lab-preview" style="margin-bottom:14px"><div class="flex-between"><div><div class="panelheader"><span class="section-icon">◉</span><div><h2>Navegador e perfis</h2><div class="muted" id="browserSummary">Perguntar ao abrir • Nenhum perfil padrão</div></div></div><div class="sub">Escolha Chrome ou Edge e qual sessão o ChatGPT pode controlar. Perfis pessoais usam uma sessão isolada para proteger seus logins e abas já abertos.</div></div><button onclick="openModal('browser')">⚙ Configurar navegador</button></div></section>
+<div class="columns"><section class="panel"><div class="panelheader"><span class="section-icon">⬡</span><div><h2>Modo de aprovação e permissões</h2><div class="muted">Decida quando autorizar ações solicitadas pelo ChatGPT.</div></div></div><div class="approval-compact"><div class="approval-levels"><button id="modeAlways" type="button" onclick="setMode('always')">Perguntar sempre</button><button id="modeCategory" type="button" onclick="setMode('category')">Por categoria</button><button id="modeMaximum" type="button" onclick="setMode('maximum')">Aprovação máxima</button></div><input id="modeSlider" type="range" min="0" max="2" step="1" value="0" aria-label="Nível de autonomia do Consecom" oninput="previewModeSlider(this.value)" onchange="commitModeSlider(this.value)"><div class="approval-status"><span id="approvalCurrentName">Perguntar sempre</span><small id="approvalHint">Solicita confirmação para ações no computador</small></div></div><div id="pendingWrap" class="hidden" style="margin-top:16px;padding:12px;background:#122c40;border:1px solid #3d5d73;border-radius:11px"><b id="pendingTitle">Aprovações pendentes</b><div id="pendingList"></div></div></section><section class="panel"><div class="panelheader"><span class="section-icon">▣</span><div><h2>Escopo de acesso</h2><div class="muted">Arquivos e projetos disponíveis pelas permissões escolhidas.</div></div></div><div class="scope"><span class="scope-icon">📁</span><div><strong id="scopeTitle">Pastas aprovadas</strong><p id="scopeDesc">Carregando permissões...</p></div></div><div class="scopeextra" id="scopeActions"><button onclick="openModal('folders')">Gerenciar pastas aprovadas</button></div></section></div>
+<section class="panel lab-preview" style="margin-bottom:14px"><div class="flex-between"><div><div class="panelheader"><span class="section-icon">◉</span><div><h2>Navegador exclusivo do Consecom</h2><div class="muted" id="browserSummary">Sessão exclusiva • Chrome / Edge</div></div></div><div class="sub">Escolha apenas Chrome ou Microsoft Edge. A sessão exclusiva do Consecom é persistente e não acessa cookies, abas ou logins do seu navegador pessoal.</div></div><button onclick="openModal('browser')">⚙ Escolher navegador</button></div></section>
 
 <section class="panel lab-preview"><div class="flex-between"><div class="panelheader"><span class="section-icon">♧</span><div><h2>Laboratório de Agentes</h2><div class="muted">Visualize atividades reais reportadas por agentes, em um canvas interativo.</div></div></div><button onclick="page('lab')">⛶ Visualizar</button></div><div class="canvas" id="previewCanvas"><div class="world" id="previewWorld"></div><div class="empty-canvas" id="emptyPreview"><span style="font-size:29px">⌘</span><strong>Aguardando agentes</strong><p>Os agentes aparecerão aqui quando registrarem suas atividades pelo MCP. Nenhum terminal simulado.</p></div></div></section></section>
 <section id="labPage" class="hidden"><header class="top"><div><h1>Laboratório de Agentes</h1><div class="sub">Mapa espacial de agentes reais conectados ao Consecom Plugin, com logs de atividade.</div></div><div class="top-actions"><button onclick="resetView()">◎ Centralizar</button><button onclick="page('panel')">← Voltar ao painel</button></div></header><div class="labtoolbar"><div class="muted" id="agentCount">0 agentes conectados</div><div class="top-actions"><button onclick="zoomBy(-.2)">− Zoom</button><button onclick="zoomBy(.2)">+ Zoom</button><button onclick="refresh()">↻ Atualizar</button></div></div><div class="canvas full" id="labCanvas"><div class="world" id="labWorld"></div><div class="empty-canvas" id="emptyLab"><span style="font-size:30px">⌘</span><strong>Nenhum agente conectado ainda</strong><p>O Laboratório recebe agentes e linhas de terminal enviadas por ferramentas MCP. Não inicia tarefas sozinho nem inventa progresso.</p></div></div><p class="muted" style="margin-top:13px">Arraste o espaço para mover o mapa; use a roda do mouse para aproximar. Os cartões recebem atualizações a cada 7 segundos.</p></section>
@@ -134,7 +164,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
  <div id="contextEmpty" class="context-graph-empty hidden">O grafo aparecerá assim que houver fontes conectadas.<p>Use os cartões de integração acima.</p></div>
  <div id="contextGraphPreview" class="context-graph-preview hidden"><button class="context-preview-close" onclick="contextClosePreview()" aria-label="Fechar prévia">×</button><div id="contextDetailTitle" class="context-preview-title"></div><div id="contextDetailBody" class="context-preview-body"></div><button id="contextOpenObsidian" onclick="openContextInObsidian()" class="hidden">Abrir nota no Obsidian ↗</button></div>
  <div id="contextGraphMenu" class="context-graph-menu hidden"></div>
- <div class="context-graph-caption"><span id="contextCounters">Carregando fontes...</span> <span>· Pastas agrupadas por origem · Arraste, aproxime e explore</span></div>
+ <div class="context-index-status" id="contextIndexStatus"><strong id="contextIndexCount">Indexando...</strong><span id="contextIndexSubtitle">Buscando arquivos do Obsidian</span></div><div class="context-graph-caption"><span id="contextCounters">Carregando fontes...</span> <span>· Pastas agrupadas por origem · Arraste, aproxime e explore</span></div>
 </div>
 <div hidden aria-hidden="true"><select id="contextVaultSelect"></select><button id="contextAutoVaultBtn" onclick="connectObsidianAuto()">Conectar cofre</button><span id="contextHeroState"></span><span id="contextVaultName"></span><span id="contextSync"></span></div>
 </section>
@@ -151,7 +181,9 @@ function nextDisk(dir=1){if(!state.disks.length)return;selectedDisk=(selectedDis
 function showDisk(){let d=state.disks[selectedDisk];document.getElementById('diskLabel').textContent=d?'Disco ('+d.label+')':'Disco (indisponível)';document.getElementById('diskUsed').textContent=d?gb(d.used):'—';document.getElementById('diskTotal').textContent=d?'de '+gb(d.total)+' • clique para alternar':'Nenhum disco legível';document.getElementById('diskBar').style.width=d?percent(d.used/d.total*100):'0%'}
 function mark(id,value){document.getElementById(id).textContent=value}
 function page(p){activePage=p;document.getElementById('panelPage').classList.toggle('hidden',p!=='panel');document.getElementById('labPage').classList.toggle('hidden',p!=='lab');document.getElementById('contextPage').classList.toggle('hidden',p!=='context');document.getElementById('navPanel').classList.toggle('active',p==='panel');document.getElementById('navLab').classList.toggle('active',p==='lab');document.getElementById('navContext').classList.toggle('active',p==='context');history.replaceState({},'',p==='lab'?'#agentes':p==='context'?'#contexto':'#painel');if(p==='context')reloadContext();else renderAgents();window.scrollTo(0,0)}
-function showMode(){for(let [v,id] of [['always','modeAlways'],['category','modeCategory'],['maximum','modeMaximum']])document.getElementById(id).classList.toggle('selected',state.mode===v);let max=state.mode==='maximum';mark('scopeTitle',max?'Acesso ampliado aos discos locais':'Pastas explicitamente autorizadas');mark('scopeDesc',max?'Pode ler, criar, editar e mover arquivos; excluir com recuperação e restaurar backups. Sistema, credenciais e áreas protegidas continuam bloqueados.':state.roots.length+' pasta(s) autorizada(s). A leitura fica restrita a elas; escrita precisa ser habilitada por pasta.');document.getElementById('scopeActions').classList.toggle('hidden',max)}
+function showMode(){for(let [v,id] of [['always','modeAlways'],['category','modeCategory'],['maximum','modeMaximum']])document.getElementById(id).classList.toggle('selected',state.mode===v);const modeIndex={always:0,category:1,maximum:2};document.getElementById('modeSlider').value=modeIndex[state.mode]??0;previewModeSlider(modeIndex[state.mode]??0);let max=state.mode==='maximum';mark('scopeTitle',max?'Acesso ampliado aos discos locais':'Pastas explicitamente autorizadas');mark('scopeDesc',max?'Pode ler, criar, editar e mover arquivos; excluir com recuperação e restaurar backups. Sistema, credenciais e áreas protegidas continuam bloqueados.':state.roots.length+' pasta(s) autorizada(s). A leitura fica restrita a elas; escrita precisa ser habilitada por pasta.');document.getElementById('scopeActions').classList.toggle('hidden',max)}
+function previewModeSlider(value){const names=['Perguntar sempre','Aprovar por categoria','Aprovação máxima'];const hints=['Confirma cada ação sensível','Autoriza por tipo de operação','Automatiza operações permitidas, mantendo restrições de segurança'];mark('approvalCurrentName',names[Number(value)]||names[0]);mark('approvalHint',hints[Number(value)]||hints[0]);}
+async function commitModeSlider(value){const modes=['always','category','maximum'];try{await setMode(modes[Number(value)]||'always')}finally{showMode()}}
 async function setMode(mode){if(mode==='maximum'){let ok=confirm('ATENÇÃO: em Aprovação máxima, comandos, janelas do Windows, alterações Git e cliques/uploads no navegador podem ser executados SEM confirmação repetida. O modo não permite acesso a credenciais/sistema, comandos arbitrários nem caminhos protegidos. Ativar acesso ampliado? Ativar?');if(!ok)return;let phrase=prompt('Para confirmar localmente, digite LIBERAR:');if(phrase!=='LIBERAR'){toast('Aprovação máxima não ativada.',true);return}await sendMode(mode,phrase)}else{await sendMode(mode,'')}}
 async function sendMode(mode,confirm){try{await api('policy',{mode,confirm});state.mode=mode;showMode();toast('Política atualizada: '+mode)}catch(e){toast(e.message,true)}}
 function renderPending(list){let wrap=document.getElementById('pendingWrap'),box=document.getElementById('pendingList');box.replaceChildren();wrap.classList.toggle('hidden',!list.length);mark('pendingTitle',list.length+' aprovação(ões) pendente(s)');for(let p of list){let line=dom('div',undefined,'pendingitem'),label=dom('div');label.append(dom('b',p.kind.toUpperCase()),dom('small',p.description));if(p.preview)label.append(dom('small','Prévia: '+p.preview));let actions=dom('div');let no=dom('button','Negar'),yes=dom('button','Aprovar','primary');no.onclick=async()=>{try{await api('actions/deny',{id:p.id});await refresh()}catch(e){toast(e.message,true)}};yes.onclick=async()=>{if(!confirm('Executar esta ação no computador?\n'+p.description))return;try{let r=await api('actions/approve',{id:p.id});toast(r.result||'Ação autorizada');await refresh()}catch(e){toast(e.message,true)}};actions.append(no,yes);line.append(label,actions);box.append(line)}}
@@ -161,7 +193,7 @@ function updateView(){document.getElementById('labWorld').style.transform='trans
 function zoomBy(delta){transform.z=Math.min(2.25,Math.max(.45,transform.z+delta));updateView()}
 function resetView(){transform={x:0,y:0,z:1};updateView()}
 const labCanvas=document.getElementById('labCanvas');labCanvas.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?.1:-.1)},{passive:false});labCanvas.addEventListener('pointerdown',e=>{if(e.target.closest('.agent'))return;dragging={canvas:true,x:e.clientX,y:e.clientY,tx:transform.x,ty:transform.y}});window.addEventListener('pointermove',e=>{if(!dragging)return;if(dragging.canvas){transform.x=dragging.tx+e.clientX-dragging.x;transform.y=dragging.ty+e.clientY-dragging.y;updateView()}else{agentViews[dragging.id]={x:dragging.oldX+(e.clientX-dragging.sx)/transform.z,y:dragging.oldY+(e.clientY-dragging.sy)/transform.z};let target=document.querySelector('#labWorld [data-id="'+dragging.id+'"]');if(target){target.style.left=agentViews[dragging.id].x+'px';target.style.top=agentViews[dragging.id].y+'px'}}});window.addEventListener('pointerup',()=>dragging=null);
-async function refresh(){if(fetching)return;fetching=true;try{let s=await api('status'),m=s.metrics||{};mark('ramUsed',gb(m.used_ram_bytes));mark('ramFree',gb(m.available_ram_bytes));mark('ramTotal','de '+gb(m.total_ram_bytes)+' físicos');mark('cpu',String(m.cpu_percent??'—')+'%');let total=m.total_ram_bytes||1;document.getElementById('ramUsedBar').style.width=percent(m.used_ram_bytes/total*100);document.getElementById('ramFreeBar').style.width=percent(m.available_ram_bytes/total*100);document.getElementById('cpuBar').style.width=percent(m.cpu_percent);let diskName=state.disks[selectedDisk]?.label;state.disks=s.disks||[];if(diskName){let i=state.disks.findIndex(d=>d.label===diskName);if(i>=0)selectedDisk=i}if(selectedDisk>=state.disks.length)selectedDisk=0;showDisk();state.roots=s.roots||[];state.mode=s.system?.mode||'always';state.agents=s.agents||[];state.tunnel=s.tunnel||{};state.updates=s.updates||{};if(!document.getElementById('sideUpdateBtn').disabled)mark('updateSummary','Repositório oficial • '+(state.updates.version||'—'));let bp=s.browser?.default||{};mark('browserSummary',bp.browser&&bp.profile?'Padrão: '+bp.browser.toUpperCase()+' • '+bp.profile:'Perguntar no ChatGPT sempre que precisar escolher');showMode();renderAgents();renderPending(s.pending||[]);let connected=s.system?.mcp_recent===true;mark('chatStatus',connected?'MCP usado recentemente':state.tunnel.status==='pronto'?'Túnel pronto':state.tunnel.status==='conectando'?'Conectando túnel...':state.tunnel.status==='iniciando'?'Iniciando túnel...':'Aguardando ChatGPT');mark('sideConnection',connected?'MCP respondeu a uma chamada recente':'Sem atividade MCP recente');let started=Date.parse(s.system?.started_at||'');mark('uptime',Number.isFinite(started)?'Ativo há '+Math.floor((Date.now()-started)/60000)+' min':'Servidor ativo');}catch(e){mark('chatStatus','Servidor indisponível');toast('Falha: '+e.message,true)}finally{fetching=false}}
+async function refresh(){if(fetching)return;fetching=true;try{let s=await api('status'),m=s.metrics||{};mark('ramUsed',gb(m.used_ram_bytes));mark('ramFree',gb(m.available_ram_bytes));mark('ramTotal','de '+gb(m.total_ram_bytes)+' físicos');mark('cpu',String(m.cpu_percent??'—')+'%');let total=m.total_ram_bytes||1;document.getElementById('ramUsedBar').style.width=percent(m.used_ram_bytes/total*100);document.getElementById('ramFreeBar').style.width=percent(m.available_ram_bytes/total*100);document.getElementById('cpuBar').style.width=percent(m.cpu_percent);let diskName=state.disks[selectedDisk]?.label;state.disks=s.disks||[];if(diskName){let i=state.disks.findIndex(d=>d.label===diskName);if(i>=0)selectedDisk=i}if(selectedDisk>=state.disks.length)selectedDisk=0;showDisk();state.roots=s.roots||[];state.mode=s.system?.mode||'always';state.agents=s.agents||[];state.tunnel=s.tunnel||{};state.updates=s.updates||{};if(!document.getElementById('sideUpdateBtn').disabled)mark('updateSummary','Repositório oficial • '+(state.updates.version||'—'));let bp=s.browser?.default||{};mark('browserSummary',bp.browser?'Sessão exclusiva • '+bp.browser.toUpperCase()+' • pronta sob demanda':'Aguardando navegador instalado');showMode();renderAgents();renderPending(s.pending||[]);let connected=s.system?.mcp_recent===true;mark('chatStatus',connected?'MCP usado recentemente':state.tunnel.status==='pronto'?'Túnel pronto':state.tunnel.status==='conectando'?'Conectando túnel...':state.tunnel.status==='iniciando'?'Iniciando túnel...':'Aguardando ChatGPT');mark('sideConnection',connected?'MCP respondeu a uma chamada recente':'Sem atividade MCP recente');let started=Date.parse(s.system?.started_at||'');mark('uptime',Number.isFinite(started)?'Ativo há '+Math.floor((Date.now()-started)/60000)+' min':'Servidor ativo');}catch(e){mark('chatStatus','Servidor indisponível');toast('Falha: '+e.message,true)}finally{fetching=false}}
 
 function connectionModal(root){
   root.append(dom('h2','Conectar ao ChatGPT'),dom('p','Conexão privada com a OpenAI, sem CMD. Configure apenas uma vez; o Consecom manterá o túnel ativo quando iniciar com o Windows.'));
@@ -187,26 +219,27 @@ function connectionModal(root){
 
 
 async function browserModal(root){
-  root.append(dom('h2','Navegador e perfil padrão'),dom('p','Sem padrão: o ChatGPT deverá perguntar antes de abrir. Com padrão: usará esta configuração automaticamente para navegação.'));
-  let stateBox=dom('div','Detectando navegadores e perfis disponíveis...');root.append(stateBox);
-  try{
-    let v=await api('browser/options');stateBox.replaceChildren();
-    let browsers=(v.browsers||[]).filter(x=>x.installed);
-    if(!browsers.length){stateBox.append(dom('p','Não encontrei Chrome nem Edge instalados nos locais padrão do Windows.'));return}
-    let labelB=dom('label','Navegador'),selB=dom('select'),labelP=dom('label','Perfil de automação'),selP=dom('select');
-    let ask=dom('option','Perguntar sempre no ChatGPT');ask.value='';selB.append(ask);
-    for(let b of browsers){let opt=dom('option',b.name);opt.value=b.id;selB.append(opt)}
-    let activeBrowser=v.default?.browser||'',activeProfile=v.default?.profile||'';selB.value=activeBrowser;
-    function profiles(){selP.replaceChildren();let b=browsers.find(x=>x.id===selB.value);
-      if(!b){let opt=dom('option','Perguntar ao ChatGPT');opt.value='';selP.append(opt);selP.disabled=true;return}
-      selP.disabled=false;for(let p of b.profiles||[]){let opt=dom('option',p.name);opt.value=p.id;selP.append(opt)}
-      if(selB.value===activeBrowser&&activeProfile&&[...selP.options].some(x=>x.value===activeProfile))selP.value=activeProfile;
-    }
-    selB.onchange=()=>{activeBrowser='';activeProfile='';profiles()};profiles();
-    let warn=dom('p','Perfis isolados não compartilham login. A opção Chrome JA ABERTO usa as contas conectadas no Chrome atual. Requer Chrome 144+ e habilitar chrome://inspect/#remote-debugging no Chrome pessoal; o Chrome pode pedir autorização local novamente. Não copia cookies ou senhas.');
-    let save=dom('button','Salvar preferência','primary');save.onclick=async()=>{let b=selB.value,p=b?selP.value:'';try{await api('browser/default',{browser:b,profile:p});toast(b?'Preferência salva. ChatGPT usará este navegador e perfil.':'Sem preferência: ChatGPT deverá perguntar.');await refresh();closeModal()}catch(e){toast(e.message,true)}};
-    stateBox.append(labelB,selB,labelP,selP,warn,save);
-  }catch(e){stateBox.textContent='Não foi possível consultar perfis: '+e.message}
+ root.append(dom('h2','Navegador exclusivo'),dom('p','O Consecom usa uma sessão separada com dados próprios. Escolha Chrome ou Microsoft Edge; não haverá conexão ao perfil pessoal nem avisos para depurar suas abas existentes.'));
+ const box=dom('div','Consultando os navegadores...');root.append(box);
+ try{
+  const v=await api('browser/options');box.replaceChildren();
+  const available=(v.browsers||[]).filter(x=>x.installed);
+  if(!available.length){box.append(dom('p','Instale Google Chrome ou Microsoft Edge para habilitar a sessão exclusiva.'));return}
+  const title=dom('label','Qual navegador o Consecom deve usar?'),choices=dom('div',undefined,'exclusive-browser-choice');
+  let selected=v.default?.browser||available[0].id;
+  const buttons=[];
+  for(const choice of available){
+   const btn=dom('button',(choice.id==='chrome'?'◉ ':'◇ ')+choice.name);
+   btn.type='button';
+   btn.onclick=()=>{selected=choice.id;for(const b of buttons)b.classList.toggle('selected',b.dataset.browser===selected)};
+   btn.dataset.browser=choice.id;buttons.push(btn);choices.append(btn);
+  }
+  for(const btn of buttons)btn.classList.toggle('selected',btn.dataset.browser===selected);
+  const hint=dom('p','Perfil permanente: Consecom exclusivo. Seus cookies e senhas pessoais não são copiados. Para sites que exigem login, entre uma vez nessa sessão separada.');
+  const button=dom('button','Usar navegador selecionado','primary');
+  button.onclick=async()=>{button.disabled=true;try{await api('browser/default',{browser:selected,profile:'managed:chatgpt'});toast('Navegador exclusivo definido. Consecom usará '+selected.toUpperCase());await refresh();closeModal()}catch(e){toast(e.message,true);button.disabled=false}};
+  box.append(title,choices,hint,button);
+ }catch(e){box.textContent='Falha ao consultar navegadores: '+e.message}
 }
 
 
@@ -226,7 +259,7 @@ function closeModal(){document.getElementById('modalBack').style.display='none'}
 function openModal(which){let root=document.getElementById('modalContent');root.replaceChildren();if(which==='connection'){connectionModal(root);}else if(which==='browser'){browserModal(root);}else if(which==='updates'){updatesModal(root).catch(e=>toast(e.message,true));}else if(which==='folders'){root.append(dom('h2','Pastas autorizadas'),dom('p','Adicione apenas pastas de projetos. Acesso de escrita é opcional; no modo máximo o acesso ampliado continua bloqueando caminhos protegidos.'));for(let r of state.roots){let line=dom('div',undefined,'rootline'),info=dom('div');info.append(dom('b',r.name),dom('small',r.path));let btn=dom('button',r.writable?'Desativar escrita':'Habilitar escrita');btn.onclick=async()=>{try{await api('roots/writable',{id:r.id,writable:!r.writable});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};let del=dom('button','Remover');del.onclick=async()=>{if(!confirm('Revogar pasta?'))return;try{await api('roots/delete',{id:r.id});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};line.append(info,btn,del);root.append(line)}let nm=dom('input');nm.placeholder='Nome (ex: Projeto Prospector)';let path=dom('input');path.placeholder='C:\\Projetos ou D:\\Prospector';let add=dom('button','Adicionar pasta','primary');add.onclick=async()=>{try{await api('roots/add',{name:nm.value,path:path.value});toast('Pasta autorizada para leitura');await refresh();openModal('folders')}catch(e){toast(e.message,true)}};root.append(nm,path,add)}document.getElementById('modalBack').style.display='grid'}
 if(location.hash==='#agentes')page('lab');else if(location.hash==='#contexto')page('context');else page('panel');refresh();setInterval(refresh,7000);
 
-let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0};
+let contextData={sources:[],notes:[],index:{}},contextScale=1,contextOffset={x:0,y:0};
 let contextSelectedNote=null,contextDrag=null,contextHoverID=null,contextSelectedID=null;
 let contextGraphNodes=new Map(),contextGraphEdges=[],contextGraphParts=new Map(),contextGraphLines=[];
 let contextGraphWorld=null,contextGraphAnimation=0,contextGraphFrames=0;
@@ -247,47 +280,65 @@ function contextGraphAppID(name){
 function contextGraphBuild(){
  const previous=contextGraphNodes;
  const nodes=new Map(),edges=[];
- function add(id,label,type,ref,color){
-  if(nodes.size>=260)return;
+ function add(id,label,type,ref,color,parent){
+  if(nodes.size>=255)return false;
   const old=previous.get(id),seq=nodes.size;
-  const angle=seq*2.399963229728653;
-  const radius=75+48*Math.sqrt(seq);
-  nodes.set(id,{id,label,type,ref,color,
-   x:old?old.x:600+Math.cos(angle)*radius,
-   y:old?old.y:350+Math.sin(angle)*radius,
+  let angle=seq*2.399963229728653,radius=75+41*Math.sqrt(seq);
+  let x=600+Math.cos(angle)*radius,y=350+Math.sin(angle)*radius;
+  if(parent&&nodes.has(parent)&&!old){
+    const root=nodes.get(parent);
+    const count=[...nodes.values()].filter(x=>x.parent===parent).length;
+    const alpha=count*2.399963229728653;
+    const spread=63+21*Math.sqrt(count);
+    x=root.x+Math.cos(alpha)*spread;y=root.y+Math.sin(alpha)*spread;
+  }
+  nodes.set(id,{id,label,type,ref,color,parent,
+   x:old?old.x:x,y:old?old.y:y,
    vx:old?old.vx:0,vy:old?old.vy:0,pinned:old?old.pinned:false});
+  return true;
  }
- if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#b69bfa');
+ const index=contextData.index||{};
+ if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#bca6ff');
  const items=window.contextIntegrationItems||[];
  for(const app of items){
   if(app.id==='obsidian'||!(app.ready||app.configured||app.observed||app.detected))continue;
-  add('app:'+app.id,app.label,'app',app,'#69cbd1');
+  add('app:'+app.id,app.label,'app',app,'#70cbbd');
  }
- const sources=contextData.sources||[];
- for(const source of sources){
+ for(const source of contextData.sources||[]){
   const id='folder:'+source.id;
-  add(id,source.label,'folder',source,'#a9b9ee');
-  const appID=contextGraphAppID(source.label);
-  const app='app:'+appID;
+  add(id,source.label,'folder',source,'#9bace7','app:'+contextGraphAppID(source.label));
+  const app='app:'+contextGraphAppID(source.label);
   if(nodes.has(app))edges.push({a:app,b:id,type:'category'});
   else if(nodes.has('vault'))edges.push({a:'vault',b:id,type:'category'});
  }
- const notes=(contextData.notes||[]).slice(0,190);
- for(const note of notes){
-  const id='note:'+note.id;
-  add(id,note.title,'note',note,'#75e2ba');
-  if(nodes.has('folder:'+note.source_id))edges.push({a:'folder:'+note.source_id,b:id,type:'category'});
+ const sourceNotes=(contextData.notes||[]).slice(0,100);
+ for(const note of sourceNotes){
+  const id='note:'+note.id,from='folder:'+note.source_id;
+  if(add(id,note.title,'note',note,'#69caa8',from)&&nodes.has(from))edges.push({a:from,b:id,type:'category'});
  }
- for(const note of notes){
-  for(const linkID of note.links||[]){
-   if(nodes.has('note:'+note.id)&&nodes.has('note:'+linkID))
-    edges.push({a:'note:'+note.id,b:'note:'+linkID,type:'link'});
+ for(const note of sourceNotes)for(const linked of note.links||[]){
+  if(nodes.has('note:'+note.id)&&nodes.has('note:'+linked))edges.push({a:'note:'+note.id,b:'note:'+linked,type:'link'});
+ }
+ // Physical Obsidian folders appear as their own clusters. This is a
+ // read-only metadata index, not an import of conversation contents.
+ const folders=(index.folders||[]).slice(0,48);
+ for(const folder of folders){
+  const id='vaultfolder:'+folder.path;
+  if(add(id,folder.name+' · '+folder.count,'indexed-folder',folder,'#ad92eb','vault')&&nodes.has('vault')){
+   edges.push({a:'vault',b:id,type:'category'});
+  }
+ }
+ const knownFolders=new Set(folders.map(f=>f.path));
+ const files=(index.files||[]).filter(f=>knownFolders.has(f.folder)).slice(0,140);
+ for(const file of files){
+  const folderID='vaultfolder:'+file.folder,id='vaultfile:'+file.path;
+  if(add(id,file.title,'indexed-file',file,'#85a8b8',folderID)&&nodes.has(folderID)){
+   edges.push({a:folderID,b:id,type:'category'});
   }
  }
  if(nodes.has('vault')){
   for(const app of items){
    if(app.id==='obsidian'||!app.ready||!nodes.has('app:'+app.id))continue;
-   // These dotted relationships describe local MCP availability, not imported chat history.
    edges.push({a:'vault',b:'app:'+app.id,type:'transport'});
   }
  }
@@ -387,11 +438,11 @@ function drawContext(){
  for(const n of contextGraphNodes.values()){
   const cls='context-node '+n.type;
   const el=svgElement('g',{class:cls,tabindex:'0',role:'button','aria-label':n.label,'data-node':n.id});
-  const size=n.type==='vault'?27:n.type==='app'?19:n.type==='folder'?15:7;
+  const size=n.type==='vault'?26:n.type==='app'?16:n.type==='indexed-folder'?Math.min(23,11+Math.sqrt(n.ref?.count||1)):n.type==='folder'?13:n.type==='indexed-file'?5.5:6;
   const circle=svgElement('circle',{cx:0,cy:0,r:size,fill:n.color});
   const title=svgElement('title',{});title.textContent=n.label;
   circle.append(title);el.append(circle);
-  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,42);
+  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,n.type==='indexed-file'?34:42);
   el.append(label);
   el.addEventListener('pointerenter',()=>{contextHoverID=n.id;contextGraphHighlight()});
   el.addEventListener('pointerleave',()=>{contextHoverID=null;contextGraphHighlight()});
@@ -400,7 +451,9 @@ function drawContext(){
  }
  contextGraphTransform();contextGraphUpdateGeometry();contextGraphHighlight();contextGraphResume();
  document.getElementById('contextEmpty').classList.toggle('hidden',contextGraphNodes.size>0);
- mark('contextCounters',contextGraphNodes.size+' nós · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas registradas');
+ const metadata=contextData.index||{};
+ mark('contextCounters',contextGraphNodes.size+' nós visíveis · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas Consecom');
+ contextIndexBadge(metadata);
 }
 function contextSettingsToggle(){document.getElementById('contextGraphSettings').classList.toggle('hidden')}
 function contextForceChanged(){
@@ -448,8 +501,8 @@ function showContextNode(p){
  const body=document.getElementById('contextDetailBody');
  const open=document.getElementById('contextOpenObsidian');
  const node=p.id?p:{type:p.note?'note':p.source?'folder':p.vault?'vault':'app',ref:p.note||p.source||null,label:p.vault?'Obsidian':p.source?.label||p.note?.title||'Integração',id:''};
- contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:null;
- title.textContent=(node.type==='folder'?'📁 ':node.type==='note'?'◇ ':'◉ ')+node.label;
+ contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:node.type==='indexed-file'?{vaultPath:node.ref.path}:null;
+ title.textContent=((node.type==='folder'||node.type==='indexed-folder')?'◈ ':node.type==='note'||node.type==='indexed-file'?'◇ ':'◉ ')+node.label;
  open.classList.toggle('hidden',!contextSelectedNote||!contextData.vault_selected);
  preview.classList.remove('hidden');
  if(node.type==='vault'){
@@ -459,7 +512,11 @@ function showContextNode(p){
  }else if(node.type==='folder'){
   const count=(contextData.notes||[]).filter(n=>n.source_id===node.ref?.id).length;
   body.textContent='Pasta lógica: '+node.label+'\nFonte: '+(node.ref?.origin||'MCP')+'\n'+count+' nota(s) cadastrada(s).\n\nAs fontes aparecem agrupadas por origem. Um nó não comprova que todos os históricos do aplicativo já foram importados.';
- }else if(node.type==='note'){
+ }else if(node.type==='indexed-folder'){
+  body.textContent='Pasta do Obsidian: '+node.ref.path+'\n'+node.ref.count+' arquivos Markdown indexados neste grupo.\n\nClique em outras bolinhas para explorar arquivos; o Consecom não abriu o conteúdo das notas.';
+ }else if(node.type==='indexed-file'){
+  body.textContent='Arquivo Markdown detectado no cofre:\n'+node.ref.path+'\n\nIndexado por nome e localização. O conteúdo da nota não foi importado automaticamente.';
+  }else if(node.type==='note'){
   body.textContent='Lendo nota registrada...';
   const id=node.ref?.id;
   if(id)api('contexto/note/read',{id}).then(r=>{
@@ -559,11 +616,45 @@ document.addEventListener('keydown',e=>{
  }
 });
 
-async function reloadContext(){
+async 
+function contextIndexBadge(index){
+ const count=document.getElementById('contextIndexCount');
+ const subtitle=document.getElementById('contextIndexSubtitle');
+ if(!count||!subtitle)return;
+ if(index.status==='ready'){
+  count.textContent=(index.total||0).toLocaleString('pt-BR')+' arquivos indexados';
+  subtitle.textContent=(index.folders||[]).length+' pastas exibidas · '+(index.complete?'varredura concluída':'índice parcial');
+ }else if(index.status==='indexing'){
+  count.textContent='Indexando Obsidian...';
+  subtitle.textContent='Lendo somente nomes e pastas · segundo plano';
+ }else{
+  count.textContent='Sem índice disponível';
+  subtitle.textContent=index.source||'Conecte o Obsidian';
+ }
+}
+let contextIndexPolling=false;
+async function refreshContextIndex(){
+ if(contextIndexPolling||activePage!=='context'||!contextData.vault_selected)return;
+ contextIndexPolling=true;
+ try{
+  const result=(await api('contexto/indice')).result;
+  const old=contextData.index||{};
+  const previous=old.status+':'+old.total+':'+(old.folders||[]).length;
+  contextData.index=result||{};
+  contextIndexBadge(contextData.index);
+  const next=contextData.index.status+':'+contextData.index.total+':'+(contextData.index.folders||[]).length;
+  if(previous!==next)drawContext();
+ }catch(e){contextIndexBadge({status:'error',source:e.message})}
+ finally{contextIndexPolling=false}
+}
+setInterval(()=>{if(activePage==='context'&&contextData.index?.status==='indexing')refreshContextIndex()},1800);
+setInterval(()=>{if(activePage==='context')refreshContextIndex()},90000);
+function reloadContext(){
  return (async()=>{
  try{
  const r=(await api('contexto')).result;
  contextData=r.graph||{sources:[],notes:[]};
+ contextData.index=r.index||{};
  const select=document.getElementById('contextVaultSelect');
  const previous=select.value;select.replaceChildren();
  const ph=dom('option','Cofres detectados');ph.value='';select.append(ph);
@@ -581,9 +672,8 @@ async function reloadContext(){
  const btn=document.getElementById('contextAutoVaultBtn');
  btn.textContent=contextData.vault_selected?'✓ Reconectar':'Conectar automaticamente';
  btn.disabled=!r.obsidian_detected;
- drawContext();
- drawContext();
  await loadContextIntegrations();
+ if(contextData.index.status==='indexing')setTimeout(refreshContextIndex,2100);
  }catch(e){toast('Contexto: '+e.message,true)}
  })()
 }async function selectContextVault(){
@@ -678,7 +768,7 @@ function renderContextExplorer(){
 
 function openContextInObsidian(){
  if(!contextSelectedNote||!contextData.vault_selected||!contextData.vault_name){toast('Selecione uma nota do cofre conectado',true);return}
- let relative='Consecom/Contexto/'+contextSelectedNote.filename;
+ let relative=contextSelectedNote.vaultPath||('Consecom/Contexto/'+contextSelectedNote.filename);
  location.href='obsidian://open?vault='+encodeURIComponent(contextData.vault_name)+'&file='+encodeURIComponent(relative);
 }
 function contextFormRoot(title){let root=document.getElementById('modalContent');root.replaceChildren();root.append(dom('h2',title));document.getElementById('modalBack').style.display='grid';return root}

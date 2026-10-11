@@ -12,6 +12,7 @@ import (
  "path/filepath"
  "regexp"
  "sort"
+ "sync"
  "strings"
  "time"
 )
@@ -37,7 +38,15 @@ $out=@(foreach($app in $apps){
 Write-Output ('CONSECOM_STARTAPPS_JSON='+ (ConvertTo-Json -InputObject $out -Compress -Depth 3))
 `
 
+var installedAppsCache struct {
+ sync.Mutex
+ Until time.Time
+ Apps []InstalledWindowsApp
+}
 func enumerateWindowsApps() ([]InstalledWindowsApp,error) {
+ installedAppsCache.Lock()
+ if time.Now().Before(installedAppsCache.Until){v:=append([]InstalledWindowsApp(nil),installedAppsCache.Apps...);installedAppsCache.Unlock();return v,nil}
+ installedAppsCache.Unlock()
  ctx,cancel:=context.WithTimeout(context.Background(),18*time.Second)
  defer cancel()
  out,err:=uiaPowerShell(ctx,startAppsScript)
@@ -64,6 +73,10 @@ func enumerateWindowsApps() ([]InstalledWindowsApp,error) {
   clean=append(clean,app)
  }
  sort.Slice(clean,func(i,j int)bool{return strings.ToLower(clean[i].Name)<strings.ToLower(clean[j].Name)})
+ installedAppsCache.Lock()
+ installedAppsCache.Apps=append([]InstalledWindowsApp(nil),clean...)
+ installedAppsCache.Until=time.Now().Add(3*time.Minute)
+ installedAppsCache.Unlock()
  return clean,nil
 }
 

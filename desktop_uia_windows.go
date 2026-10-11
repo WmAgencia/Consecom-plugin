@@ -98,7 +98,8 @@ func uiaPowerShell(ctx context.Context, script string)([]byte,error){
  encoded:=utf16.Encode([]rune(script))
  raw:=make([]byte,len(encoded)*2)
  for i,v:=range encoded{raw[2*i]=byte(v);raw[2*i+1]=byte(v>>8)}
- cmd:=exec.CommandContext(ctx,"powershell.exe","-NoLogo","-NoProfile","-NonInteractive","-EncodedCommand",base64.StdEncoding.EncodeToString(raw))
+ cmd:=exec.CommandContext(ctx,"powershell.exe","-NoLogo","-NoProfile","-NonInteractive","-WindowStyle","Hidden","-EncodedCommand",base64.StdEncoding.EncodeToString(raw))
+ cmd.SysProcAttr=&syscall.SysProcAttr{HideWindow:true,CreationFlags:0x08000000}
  // PowerShell executes only the fixed script built above; never interpolates
  // untrusted PowerShell source or lets the caller supply shell flags.
  out,err:=cmd.CombinedOutput()
