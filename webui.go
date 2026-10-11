@@ -69,7 +69,48 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 #contextPage .context-vault-advanced{font-size:11px;color:#96b4c7}
 @media(max-width:1220px){#contextPage .context-layout{grid-template-columns:210px minmax(0,1fr)}#contextPage .context-detail{grid-column:1/-1;min-height:180px}}
 @media(max-width:760px){#contextPage .context-layout{grid-template-columns:1fr}#contextPage .context-explorer{min-height:180px;max-height:380px}#contextPage .context-canvas{height:420px}#contextPage .context-detail{grid-column:auto}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.9.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+
+/* v4.10 Obsidian-inspired graph: only connection cards + uninterrupted canvas. */
+#contextPage{display:flex;flex-direction:column;gap:12px;height:calc(100vh - 96px);min-height:660px}
+#contextPage.hidden{display:none!important}
+#contextPage .context-card-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin;gap:10px;margin:0;padding:2px 0 8px;flex:0 0 auto;min-height:150px}
+#contextPage .integration-card{flex:0 0 223px;min-height:145px;padding:14px;border-radius:14px;background:linear-gradient(145deg,#182430,#0d1a25);border:1px solid #304452;box-shadow:0 4px 20px #00000024}
+#contextPage .integration-card h3{font-size:14px;letter-spacing:-.1px}
+#contextPage .integration-card p{font-size:11px;min-height:0;line-height:1.45;margin:8px 0;color:#9db4c1}
+#contextPage .integration-status{font-size:10px;padding:5px 9px}
+#contextPage .context-graph-infinite{flex:1;position:relative;min-height:460px;width:100%;border-radius:16px;overflow:hidden;border:1px solid #26374d;background-color:#101820;background-image:radial-gradient(#2e4250 1px,transparent 1px);background-size:25px 25px;touch-action:none}
+#contextPage .context-graph-infinite svg{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#contextPage .context-graph-infinite svg.dragging{cursor:grabbing}
+#contextPage .context-node{cursor:grab;outline:none}
+#contextPage .context-node.dragging{cursor:grabbing}
+#contextPage .context-node circle{stroke:#daf8ff50;stroke-width:1.5;transition:filter .14s,stroke .14s}
+#contextPage .context-node:hover circle,#contextPage .context-node:focus circle{stroke:#f3ffff;stroke-width:2.5;filter:drop-shadow(0 0 10px #7bece17f)}
+#contextPage .context-node text{font:12px 'Segoe UI',Arial,sans-serif;fill:#d7e7f0;stroke:#0e1c26;stroke-width:3.5px;paint-order:stroke;pointer-events:none;text-anchor:middle}
+#contextPage .context-node.folder text{font-weight:650}
+#contextPage .context-node.note text{font-size:11px}
+#contextPage .context-edge{stroke:#607d9b;stroke-width:1.2;opacity:.4;pointer-events:none}
+#contextPage .graph-actions{position:absolute;top:14px;left:14px;z-index:3;display:flex;align-items:center;gap:5px;padding:6px;border:1px solid #3c5365;border-radius:12px;background:#111e2ae8;backdrop-filter:blur(10px)}
+#contextPage .graph-actions button{border:0;min-height:34px;padding:5px 9px;background:transparent;font-size:18px;color:#b9d1df}
+#contextPage .graph-actions button:hover{background:#2b3c4d}
+#contextPage .graph-actions input{width:210px;min-width:0;padding:8px;background:#0d1722;border:1px solid #35485a;color:#e8f3f7;border-radius:8px;font-size:12px}
+#contextPage .context-graph-caption{position:absolute;bottom:13px;left:15px;z-index:2;color:#88a2b1;font-size:11px;pointer-events:none;background:#0e1b25c7;border-radius:8px;padding:7px 10px}
+#contextPage .context-graph-preview{position:absolute;z-index:4;right:16px;top:70px;width:min(340px,calc(100% - 32px));max-height:65%;overflow:auto;padding:18px;background:#142431f5;border:1px solid #38576a;border-radius:14px;box-shadow:0 16px 55px #0009}
+#contextPage .context-preview-title{font-size:16px;font-weight:700;padding-right:28px;margin-bottom:12px}
+#contextPage .context-preview-body{font-size:12px;line-height:1.65;color:#bad0de;white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto}
+#contextPage .context-preview-close{position:absolute;right:9px;top:8px;font-size:20px;border:0;background:transparent;padding:2px 8px}
+#contextPage #contextOpenObsidian{margin-top:12px;font-size:12px}
+#contextPage .context-graph-settings{position:absolute;z-index:5;left:14px;top:70px;background:#152432f4;border:1px solid #3e5b69;border-radius:12px;padding:16px;width:min(285px,calc(100% - 28px));box-shadow:0 15px 35px #0007}
+#contextPage .context-graph-settings label{display:block;font-size:12px;color:#c0d6e2;margin-top:14px}
+#contextPage .context-graph-settings input{display:block;width:100%;accent-color:#51c6ae}
+#contextPage .context-graph-settings p{color:#92a9b6;font-size:11px;line-height:1.5}
+#contextPage .context-graph-menu{position:absolute;z-index:6;min-width:180px;background:#152b36;border:1px solid #456171;border-radius:10px;padding:5px;box-shadow:0 18px 35px #000a}
+#contextPage .context-graph-menu button{display:block;text-align:left;width:100%;border:0;background:transparent;border-radius:7px;padding:9px;font-size:12px}
+#contextPage .context-graph-menu button:hover{background:#304351}
+#contextPage .context-graph-empty{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:380px;text-align:center;pointer-events:none;font-size:13px;color:#b0c6cf}
+@media(max-width:900px){#contextPage{height:calc(100dvh - 120px);min-height:560px}#contextPage .integration-card{flex-basis:205px}#contextPage .graph-actions input{width:140px}}
+@media(max-width:500px){#contextPage .graph-actions input{width:110px}#contextPage .graph-actions button{font-size:14px;padding:5px}#contextPage .context-graph-caption span:last-child{display:none}}
+
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.10.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header>
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
 <div class="columns"><section class="panel"><div class="panelheader"><span class="section-icon">⬡</span><div><h2>Modo de aprovação e permissões</h2><div class="muted">Decida quando autorizar ações solicitadas pelo ChatGPT.</div></div></div><div class="choices"><button class="choice" id="modeAlways" onclick="setMode('always')"><span class="symbol">☏</span><strong>Perguntar sempre</strong><small>Confirma cada alteração no computador.</small></button><button class="choice" id="modeCategory" onclick="setMode('category')"><span class="symbol">☷</span><strong>Aprovar por categoria</strong><small>Gravação em projetos autorizados sem perguntas repetidas.</small></button><button class="choice" id="modeMaximum" onclick="setMode('maximum')"><span class="symbol">♛</span><strong>Aprovação máxima</strong><small>Executa automaticamente as ferramentas permitidas, inclusive Windows, terminal, Git e navegador. Restrições técnicas continuam.</small></button></div><div id="pendingWrap" class="hidden" style="margin-top:16px;padding:12px;background:#122c40;border:1px solid #3d5d73;border-radius:11px"><b id="pendingTitle">Aprovações pendentes</b><div id="pendingList"></div></div></section><section class="panel"><div class="panelheader"><span class="section-icon">▣</span><div><h2>Escopo de acesso</h2><div class="muted">Arquivos e projetos disponíveis pelas permissões escolhidas.</div></div></div><div class="scope"><span class="scope-icon">📁</span><div><strong id="scopeTitle">Pastas aprovadas</strong><p id="scopeDesc">Carregando permissões...</p></div></div><div class="scopeextra" id="scopeActions"><button onclick="openModal('folders')">Gerenciar pastas aprovadas</button></div></section></div>
@@ -79,12 +120,23 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <section id="labPage" class="hidden"><header class="top"><div><h1>Laboratório de Agentes</h1><div class="sub">Mapa espacial de agentes reais conectados ao Consecom Plugin, com logs de atividade.</div></div><div class="top-actions"><button onclick="resetView()">◎ Centralizar</button><button onclick="page('panel')">← Voltar ao painel</button></div></header><div class="labtoolbar"><div class="muted" id="agentCount">0 agentes conectados</div><div class="top-actions"><button onclick="zoomBy(-.2)">− Zoom</button><button onclick="zoomBy(.2)">+ Zoom</button><button onclick="refresh()">↻ Atualizar</button></div></div><div class="canvas full" id="labCanvas"><div class="world" id="labWorld"></div><div class="empty-canvas" id="emptyLab"><span style="font-size:30px">⌘</span><strong>Nenhum agente conectado ainda</strong><p>O Laboratório recebe agentes e linhas de terminal enviadas por ferramentas MCP. Não inicia tarefas sozinho nem inventa progresso.</p></div></div><p class="muted" style="margin-top:13px">Arraste o espaço para mover o mapa; use a roda do mouse para aproximar. Os cartões recebem atualizações a cada 7 segundos.</p></section>
 
 <section id="contextPage" class="hidden">
-<header class="top"><div><h1>Contexto</h1><div class="sub">Mapa de conhecimento • fontes MCP, ideias conectadas e notas Markdown sincronizadas ao Obsidian.</div></div><div class="top-actions"><button onclick="reloadContext()">↻ Atualizar</button><button onclick="openContextSource()">＋ Fonte</button><button class="primary" onclick="openContextNote()">＋ Nova ideia</button></div></header>
-<div class="context-hero"><div><strong>◎ Cofre de conhecimento</strong><p>Fontes conectadas, pastas e ideias em um só mapa. Sincronização restrita a Consecom/Contexto.</p></div><span class="context-pill" id="contextHeroState">Descobrindo cofre...</span></div>
-<div class="context-header"><div class="context-workspace"><span class="muted">◈ Obsidian</span><b id="contextVaultName">Nenhum cofre conectado</b><span class="muted" id="contextSync">Aguardando detecção</span><button class="primary" onclick="connectObsidianAuto()" id="contextAutoVaultBtn">Conectar automaticamente</button><details class="context-vault-advanced"><summary>Trocar cofre</summary><select id="contextVaultSelect"><option value="">Carregando...</option></select><button onclick="selectContextVault()">Usar este cofre</button></details></div><div class="context-legend"><span><i style="background:#57cbaa"></i>Aplicativos</span><span><i style="background:#a899ed"></i>Pastas</span><span><i style="background:#68beee"></i>Notas</span></div></div>
-<div class="integrations-title">Integrações disponíveis <span class="muted">— detecção e conexão pelo Windows</span></div>
-<div id="contextIntegrations" class="integration-cards"><span class="muted">Procurando aplicativos compatíveis...</span></div>
-<div class="context-layout"><nav class="context-explorer" aria-label="Explorador de fontes e notas"><h3>Explorador</h3><input class="context-search" id="contextSearchInput" placeholder="⌕ Buscar fontes e notas" aria-label="Buscar no Contexto" oninput="renderContextExplorer()"><div id="contextExplorerTree"></div><div class="context-explorer-footer">Mostra apenas fontes registradas e notas geradas pelo Consecom. Não lê automaticamente seus outros documentos.</div></nav><div class="context-canvas" id="contextCanvas"><span class="context-toolbar">◎ Grafo de relações · arraste para navegar</span><svg id="contextSVG" viewBox="0 0 900 610" aria-label="Grafo interativo de fontes e ideias" role="img"></svg><div class="context-empty" id="contextEmpty">Nenhuma fonte registrada ainda.<p>Conecte um cliente MCP ou clique em <strong>＋ Fonte</strong> para começar.</p></div></div><aside class="context-detail"><h3 id="contextDetailTitle">Explorar conhecimento</h3><p class="context-info" id="contextDetailBody">Clique em uma bolinha para ver a fonte ou a ideia. As notas são salvas apenas na pasta Consecom/Contexto do cofre escolhido.</p><div class="context-control" style="margin-top:18px"><button onclick="contextZoom(.8)">＋</button><button onclick="contextZoom(1.25)">−</button><button onclick="contextReset()">◎ Centralizar</button><button id="contextOpenObsidian" onclick="openContextInObsidian()" disabled>Abrir no Obsidian ↗</button></div><p class="context-meta" id="contextCounters">0 fontes • 0 notas</p><p class="context-meta">O histórico completo do ChatGPT não é transmitido automaticamente. Envie resumos autorizados pelo MCP ou importe um arquivo exportado posteriormente.</p></aside></div>
+<div id="contextIntegrations" class="integration-cards context-card-strip" aria-label="Conectar aplicativos"><span class="muted">Identificando integrações...</span></div>
+<div id="contextCanvas" class="context-graph-infinite">
+ <div class="graph-actions" aria-label="Controles do grafo">
+  <input id="contextGraphSearch" placeholder="⌕ Buscar contexto ou pasta..." aria-label="Buscar nós no grafo" oninput="contextFilterGraph()" autocomplete="off">
+  <button title="Aproximar" aria-label="Aproximar" onclick="contextZoom(1.22)">＋</button>
+  <button title="Afastar" aria-label="Afastar" onclick="contextZoom(1/1.22)">−</button>
+  <button title="Centralizar grafo" aria-label="Centralizar grafo" onclick="contextReset()">◎</button>
+  <button title="Configurações do grafo" aria-label="Configurações do grafo" onclick="contextSettingsToggle()">⚙</button>
+ </div>
+ <div id="contextGraphSettings" class="context-graph-settings hidden"><b>Aparência do grafo</b><label>Repulsão <input type="range" id="contextRepel" min="25" max="180" value="96" oninput="contextForceChanged()"></label><label>Distância das ligações <input type="range" id="contextDistance" min="65" max="240" value="128" oninput="contextForceChanged()"></label><p>Arraste círculos para mover · espaço vazio para navegar · roda para zoom. Clique para prévia; botão direito para ações.</p></div>
+ <svg id="contextSVG" viewBox="0 0 1200 720" preserveAspectRatio="none" aria-label="Grafo de conhecimento com nós arrastáveis, pastas e relações" role="img"></svg>
+ <div id="contextEmpty" class="context-graph-empty hidden">O grafo aparecerá assim que houver fontes conectadas.<p>Use os cartões de integração acima.</p></div>
+ <div id="contextGraphPreview" class="context-graph-preview hidden"><button class="context-preview-close" onclick="contextClosePreview()" aria-label="Fechar prévia">×</button><div id="contextDetailTitle" class="context-preview-title"></div><div id="contextDetailBody" class="context-preview-body"></div><button id="contextOpenObsidian" onclick="openContextInObsidian()" class="hidden">Abrir nota no Obsidian ↗</button></div>
+ <div id="contextGraphMenu" class="context-graph-menu hidden"></div>
+ <div class="context-graph-caption"><span id="contextCounters">Carregando fontes...</span> <span>· Pastas agrupadas por origem · Arraste, aproxime e explore</span></div>
+</div>
+<div hidden aria-hidden="true"><select id="contextVaultSelect"></select><button id="contextAutoVaultBtn" onclick="connectObsidianAuto()">Conectar cofre</button><span id="contextHeroState"></span><span id="contextVaultName"></span><span id="contextSync"></span></div>
 </section>
 </main></div><div class="modalback" id="modalBack" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true"><div id="modalContent"></div><div class="group" style="margin-top:17px"><button onclick="closeModal()">Fechar</button></div></div></div><div id="toast" class="toast"></div><script>
 const KEY='___TOKEN___';let state={roots:[],disks:[],agents:[],mode:'always'};let selectedDisk=0;let fetching=false;let activePage='panel';let agentViews={};let transform={x:0,y:0,z:1};let dragging=null;
@@ -174,48 +226,339 @@ function closeModal(){document.getElementById('modalBack').style.display='none'}
 function openModal(which){let root=document.getElementById('modalContent');root.replaceChildren();if(which==='connection'){connectionModal(root);}else if(which==='browser'){browserModal(root);}else if(which==='updates'){updatesModal(root).catch(e=>toast(e.message,true));}else if(which==='folders'){root.append(dom('h2','Pastas autorizadas'),dom('p','Adicione apenas pastas de projetos. Acesso de escrita é opcional; no modo máximo o acesso ampliado continua bloqueando caminhos protegidos.'));for(let r of state.roots){let line=dom('div',undefined,'rootline'),info=dom('div');info.append(dom('b',r.name),dom('small',r.path));let btn=dom('button',r.writable?'Desativar escrita':'Habilitar escrita');btn.onclick=async()=>{try{await api('roots/writable',{id:r.id,writable:!r.writable});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};let del=dom('button','Remover');del.onclick=async()=>{if(!confirm('Revogar pasta?'))return;try{await api('roots/delete',{id:r.id});await refresh();openModal('folders')}catch(e){toast(e.message,true)}};line.append(info,btn,del);root.append(line)}let nm=dom('input');nm.placeholder='Nome (ex: Projeto Prospector)';let path=dom('input');path.placeholder='C:\\Projetos ou D:\\Prospector';let add=dom('button','Adicionar pasta','primary');add.onclick=async()=>{try{await api('roots/add',{name:nm.value,path:path.value});toast('Pasta autorizada para leitura');await refresh();openModal('folders')}catch(e){toast(e.message,true)}};root.append(nm,path,add)}document.getElementById('modalBack').style.display='grid'}
 if(location.hash==='#agentes')page('lab');else if(location.hash==='#contexto')page('context');else page('panel');refresh();setInterval(refresh,7000);
 
-let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0},contextDrag=null;
-let contextSelectedNote=null;
-function svgElement(tag,attrs){let n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(let k in attrs)n.setAttribute(k,attrs[k]);return n}
-function contextReset(){contextScale=1;contextOffset={x:0,y:0};drawContext()}
-function contextZoom(k){contextScale=Math.max(.5,Math.min(3,contextScale*k));drawContext()}
-function drawContext(){
- let svg=document.getElementById('contextSVG');svg.replaceChildren();let sources=contextData.sources||[],notes=contextData.notes||[];
- document.getElementById('contextEmpty').classList.toggle('hidden',Boolean(contextData.vault_selected)||sources.length>0||notes.length>0);
- mark('contextCounters',sources.length+' fontes • '+notes.length+' ideias'+(contextData.vault_selected?' • 1 cofre':''));
- let layout={};let count=sources.length;
- if(contextData.vault_selected){layout['vault-obsidian']={x:450,y:305,color:'#ba91ff',size:42,vault:true,label:'Obsidian'};}
- sources.forEach((src,i)=>{let angle=(i/Math.max(1,count))*Math.PI*2-Math.PI/2;layout[src.id]={x:450+Math.cos(angle)*190,y:290+Math.sin(angle)*175,color:'#4dc7ff',size:30,source:src}});
- let perSource={};notes.forEach(n=>{(perSource[n.source_id]||(perSource[n.source_id]=[])).push(n)});
- notes.forEach(n=>{let group=perSource[n.source_id],idx=group.indexOf(n),base=layout[n.source_id]||{x:450,y:305};let angle=(idx/Math.max(1,group.length))*Math.PI*2+idx*.13;let radius=75+18*Math.floor(idx/6);layout[n.id]={x:base.x+Math.cos(angle)*radius,y:base.y+Math.sin(angle)*radius,color:'#3ee0af',size:12,note:n}});
- let g=svgElement('g',{transform:'translate('+contextOffset.x+' '+contextOffset.y+') scale('+contextScale+')'});svg.append(g);
- if(contextData.vault_selected){for(let s of sources){let t=layout[s.id];if(t)g.append(svgElement('line',{x1:450,y1:305,x2:t.x,y2:t.y,class:'context-edge'}))}}
- notes.forEach(n=>{let a=layout[n.source_id],b=layout[n.id];if(a&&b)g.append(svgElement('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:'context-edge'}));
- (n.links||[]).forEach(id=>{let t=layout[id];if(t)g.append(svgElement('line',{x1:b.x,y1:b.y,x2:t.x,y2:t.y,stroke:'#c098ff','stroke-width':'1.5','stroke-dasharray':'4 4',opacity:'.8'}))});
- });
- Object.entries(layout).forEach(([id,p])=>{let node=svgElement('g',{class:'context-node',tabindex:'0',role:'button','aria-label':p.vault?'Obsidian '+contextData.vault_name:(p.source?p.source.label:p.note.title)});
- node.append(svgElement('circle',{cx:p.x,cy:p.y,r:p.size,fill:p.color,opacity:'.9'}));
- let t=svgElement('text',{x:p.x,y:p.y+p.size+17});t.textContent=(p.vault?('Obsidian · '+contextData.vault_name):(p.source?p.source.label:p.note.title)).slice(0,28);node.append(t);
- node.addEventListener('click',()=>showContextNode(p));node.addEventListener('keydown',e=>{if(e.key==='Enter')showContextNode(p)});
- g.append(node)});
+let contextData={sources:[],notes:[]},contextScale=1,contextOffset={x:0,y:0};
+let contextSelectedNote=null,contextDrag=null,contextHoverID=null,contextSelectedID=null;
+let contextGraphNodes=new Map(),contextGraphEdges=[],contextGraphParts=new Map(),contextGraphLines=[];
+let contextGraphWorld=null,contextGraphAnimation=0,contextGraphFrames=0;
+let contextRepulsion=96,contextLinkDistance=128;
+const contextCanvas=document.getElementById('contextCanvas'),contextSVG=document.getElementById('contextSVG');
+function svgElement(tag,attrs){const el=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const k in attrs)el.setAttribute(k,attrs[k]);return el}
+function contextGraphNormalize(name){return String(name||'').toLowerCase().replace(/[\s_.-]+/g,'')}
+function contextGraphAppID(name){
+ const s=contextGraphNormalize(name);
+ if(s.includes('claude')||s.includes('cloudcode'))return 'claude-code';
+ if(s.includes('opencode'))return 'opencode';
+ if(s.includes('codex'))return 'codex';
+ if(s.includes('chatgpt')||s.includes('openai'))return 'chatgpt';
+ if(s.includes('cursor'))return 'cursor';
+ if(s.includes('obsidian'))return 'obsidian';
+ return '';
 }
-function showContextNode(p){
- contextSelectedNote=p.note||null;
- document.getElementById('contextOpenObsidian').disabled=!contextSelectedNote||!contextData.vault_selected;
- let name=p.vault?'Obsidian — '+contextData.vault_name:(p.source?p.source.label:p.note.title);
- mark('contextDetailTitle',name);
- if(p.vault){mark('contextDetailBody','Cofre selecionado e sincronizado em Consecom/Contexto. Esta bolinha representa o cofre, mesmo sem notas ou agentes registrados.')}
- else if(p.source){let count=(contextData.notes||[]).filter(x=>x.source_id===p.source.id).length;mark('contextDetailBody','Fonte MCP • '+p.source.origin+'\n'+count+' nota(s) vinculada(s).\n\nEsta fonte foi declarada pelo cliente; o nome não comprova a identidade do programa.')}
- else{
- mark('contextDetailBody','Nota Markdown • '+new Date(p.note.created).toLocaleString('pt-BR')+'\n'+(p.note.links||[]).length+' relação(ões). Carregando...');
- api('contexto/note/read',{id:p.note.id}).then(r=>mark('contextDetailBody',r.result.content||'')).catch(e=>mark('contextDetailBody',e.message));
+function contextGraphBuild(){
+ const previous=contextGraphNodes;
+ const nodes=new Map(),edges=[];
+ function add(id,label,type,ref,color){
+  if(nodes.size>=260)return;
+  const old=previous.get(id),seq=nodes.size;
+  const angle=seq*2.399963229728653;
+  const radius=75+48*Math.sqrt(seq);
+  nodes.set(id,{id,label,type,ref,color,
+   x:old?old.x:600+Math.cos(angle)*radius,
+   y:old?old.y:350+Math.sin(angle)*radius,
+   vx:old?old.vx:0,vy:old?old.vy:0,pinned:old?old.pinned:false});
+ }
+ if(contextData.vault_selected)add('vault','Obsidian · '+contextData.vault_name,'vault',null,'#b69bfa');
+ const items=window.contextIntegrationItems||[];
+ for(const app of items){
+  if(app.id==='obsidian'||!(app.ready||app.configured||app.observed||app.detected))continue;
+  add('app:'+app.id,app.label,'app',app,'#69cbd1');
+ }
+ const sources=contextData.sources||[];
+ for(const source of sources){
+  const id='folder:'+source.id;
+  add(id,source.label,'folder',source,'#a9b9ee');
+  const appID=contextGraphAppID(source.label);
+  const app='app:'+appID;
+  if(nodes.has(app))edges.push({a:app,b:id,type:'category'});
+  else if(nodes.has('vault'))edges.push({a:'vault',b:id,type:'category'});
+ }
+ const notes=(contextData.notes||[]).slice(0,190);
+ for(const note of notes){
+  const id='note:'+note.id;
+  add(id,note.title,'note',note,'#75e2ba');
+  if(nodes.has('folder:'+note.source_id))edges.push({a:'folder:'+note.source_id,b:id,type:'category'});
+ }
+ for(const note of notes){
+  for(const linkID of note.links||[]){
+   if(nodes.has('note:'+note.id)&&nodes.has('note:'+linkID))
+    edges.push({a:'note:'+note.id,b:'note:'+linkID,type:'link'});
+  }
+ }
+ if(nodes.has('vault')){
+  for(const app of items){
+   if(app.id==='obsidian'||!app.ready||!nodes.has('app:'+app.id))continue;
+   // These dotted relationships describe local MCP availability, not imported chat history.
+   edges.push({a:'vault',b:'app:'+app.id,type:'transport'});
+  }
+ }
+ contextGraphNodes=nodes;contextGraphEdges=edges;
+}
+function contextGraphTransform(){
+ if(contextGraphWorld)contextGraphWorld.setAttribute('transform','translate('+contextOffset.x+' '+contextOffset.y+') scale('+contextScale+')');
+ contextCanvas.style.backgroundPosition=(contextOffset.x*contextSVG.clientWidth/1200)+'px '+(contextOffset.y*contextSVG.clientHeight/720)+'px';
+}
+function contextGraphUpdateGeometry(){
+ for(let i=0;i<contextGraphEdges.length;i++){
+  const edge=contextGraphEdges[i],line=contextGraphLines[i],a=contextGraphNodes.get(edge.a),b=contextGraphNodes.get(edge.b);
+  if(!line||!a||!b)continue;
+  line.setAttribute('x1',a.x);line.setAttribute('y1',a.y);line.setAttribute('x2',b.x);line.setAttribute('y2',b.y);
+ }
+ for(const [id,el] of contextGraphParts){
+  const node=contextGraphNodes.get(id);if(node)el.setAttribute('transform','translate('+node.x+' '+node.y+')');
  }
 }
-const contextCanvas=document.getElementById('contextCanvas');
-contextCanvas.addEventListener('wheel',e=>{if(activePage!=='context')return;e.preventDefault();contextZoom(e.deltaY<0?1.12:.9)},{passive:false});
-contextCanvas.addEventListener('pointerdown',e=>{if(e.target.closest('.context-node'))return;contextDrag={x:e.clientX,y:e.clientY,offsetX:contextOffset.x,offsetY:contextOffset.y};contextCanvas.setPointerCapture(e.pointerId)});
-contextCanvas.addEventListener('pointermove',e=>{if(!contextDrag)return;let b=contextCanvas.getBoundingClientRect();contextOffset.x=contextDrag.offsetX+(e.clientX-contextDrag.x)*900/b.width;contextOffset.y=contextDrag.offsetY+(e.clientY-contextDrag.y)*610/b.height;drawContext()});
-contextCanvas.addEventListener('pointerup',()=>contextDrag=null);
+function contextGraphTick(){
+ contextGraphAnimation=0;
+ if(activePage!=='context'||contextGraphFrames>260||contextGraphNodes.size===0)return;
+ contextGraphFrames++;
+ const nodes=[...contextGraphNodes.values()];
+ // Force-directed layout: repulsion, springs, gentle gravity and velocity damping.
+ for(let i=0;i<nodes.length;i++){
+  for(let j=i+1;j<nodes.length;j++){
+   const a=nodes[i],b=nodes[j];
+   let dx=a.x-b.x,dy=a.y-b.y;
+   let d2=Math.max(160,dx*dx+dy*dy);
+   const force=contextRepulsion*30/d2;
+   const fx=dx*force/Math.sqrt(d2),fy=dy*force/Math.sqrt(d2);
+   if(!a.pinned){a.vx+=fx;a.vy+=fy}
+   if(!b.pinned){b.vx-=fx;b.vy-=fy}
+  }
+ }
+ for(const edge of contextGraphEdges){
+  const a=contextGraphNodes.get(edge.a),b=contextGraphNodes.get(edge.b);if(!a||!b)continue;
+  const dx=b.x-a.x,dy=b.y-a.y,dist=Math.max(1,Math.hypot(dx,dy));
+  const target=contextLinkDistance*(edge.type==='transport'?1.6:edge.type==='link'?.85:1);
+  const strength=(dist-target)*.013;
+  const fx=dx/dist*strength,fy=dy/dist*strength;
+  if(!a.pinned){a.vx+=fx;a.vy+=fy}
+  if(!b.pinned){b.vx-=fx;b.vy-=fy}
+ }
+ for(const n of nodes){
+  if(n.pinned){n.vx=0;n.vy=0;continue}
+  n.vx+=(600-n.x)*.0008;n.vy+=(350-n.y)*.0008;
+  n.vx*=.84;n.vy*=.84;
+  n.x+=Math.max(-8,Math.min(8,n.vx));
+  n.y+=Math.max(-8,Math.min(8,n.vy));
+ }
+ contextGraphUpdateGeometry();
+ if(contextGraphFrames<260)contextGraphAnimation=requestAnimationFrame(contextGraphTick);
+}
+function contextGraphResume(){
+ contextGraphFrames=0;
+ if(!contextGraphAnimation)contextGraphAnimation=requestAnimationFrame(contextGraphTick);
+}
+function contextGraphHighlight(){
+ const term=(document.getElementById('contextGraphSearch')?.value||'').toLowerCase().trim();
+ const neighborhood=new Set();
+ if(contextHoverID){
+  neighborhood.add(contextHoverID);
+  for(const edge of contextGraphEdges){if(edge.a===contextHoverID)neighborhood.add(edge.b);if(edge.b===contextHoverID)neighborhood.add(edge.a)}
+ }
+ const matched=new Set();
+ if(term)for(const n of contextGraphNodes.values())if(n.label.toLowerCase().includes(term))matched.add(n.id);
+ for(const [id,el] of contextGraphParts){
+  const n=contextGraphNodes.get(id);
+  const searchDim=term&& !matched.has(id) ? .12:1;
+  const hoverDim=contextHoverID && !neighborhood.has(id) ? .17:1;
+  el.style.opacity=String(Math.min(searchDim,hoverDim));
+  el.style.pointerEvents=searchDim===.12?'none':'auto';
+ }
+ for(let i=0;i<contextGraphEdges.length;i++){
+  const edge=contextGraphEdges[i],line=contextGraphLines[i];
+  const connected=contextHoverID&&(edge.a===contextHoverID||edge.b===contextHoverID);
+  const searchDim=term && !matched.has(edge.a)&&!matched.has(edge.b);
+  line.style.opacity=String(searchDim?.06:contextHoverID?(connected?.85:.06):edge.type==='transport'?.26:.39);
+  line.setAttribute('stroke-width',connected?2.3:1.3);
+ }
+}
+function contextFilterGraph(){contextGraphHighlight()}
+function drawContext(){
+ contextGraphBuild();
+ contextGraphParts=new Map();contextGraphLines=[];
+ contextSVG.replaceChildren();
+ const world=svgElement('g',{});contextSVG.append(world);contextGraphWorld=world;
+ const lines=svgElement('g',{});world.append(lines);
+ for(const edge of contextGraphEdges){
+  const line=svgElement('line',{class:'context-edge',stroke:edge.type==='link'?'#ae9be9':'#658595'});
+  if(edge.type==='transport')line.setAttribute('stroke-dasharray','4 7');
+  lines.append(line);contextGraphLines.push(line);
+ }
+ const points=svgElement('g',{});world.append(points);
+ for(const n of contextGraphNodes.values()){
+  const cls='context-node '+n.type;
+  const el=svgElement('g',{class:cls,tabindex:'0',role:'button','aria-label':n.label,'data-node':n.id});
+  const size=n.type==='vault'?27:n.type==='app'?19:n.type==='folder'?15:7;
+  const circle=svgElement('circle',{cx:0,cy:0,r:size,fill:n.color});
+  const title=svgElement('title',{});title.textContent=n.label;
+  circle.append(title);el.append(circle);
+  const label=svgElement('text',{x:0,y:size+17});label.textContent=n.label.slice(0,42);
+  el.append(label);
+  el.addEventListener('pointerenter',()=>{contextHoverID=n.id;contextGraphHighlight()});
+  el.addEventListener('pointerleave',()=>{contextHoverID=null;contextGraphHighlight()});
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showContextNode(n)}});
+  points.append(el);contextGraphParts.set(n.id,el);
+ }
+ contextGraphTransform();contextGraphUpdateGeometry();contextGraphHighlight();contextGraphResume();
+ document.getElementById('contextEmpty').classList.toggle('hidden',contextGraphNodes.size>0);
+ mark('contextCounters',contextGraphNodes.size+' nós · '+contextGraphEdges.length+' relações · '+(contextData.notes||[]).length+' notas registradas');
+}
+function contextSettingsToggle(){document.getElementById('contextGraphSettings').classList.toggle('hidden')}
+function contextForceChanged(){
+ contextRepulsion=Number(document.getElementById('contextRepel').value);
+ contextLinkDistance=Number(document.getElementById('contextDistance').value);
+ for(const n of contextGraphNodes.values())n.pinned=false;
+ contextGraphResume();
+}
+function contextZoom(multiplier,px=600,py=360){
+ const old=contextScale;
+ contextScale=Math.max(.25,Math.min(5,old*multiplier));
+ contextOffset.x=px-(px-contextOffset.x)*contextScale/old;
+ contextOffset.y=py-(py-contextOffset.y)*contextScale/old;
+ contextGraphTransform();
+}
+function contextReset(){
+ contextScale=1;contextOffset={x:0,y:0};
+ let i=0;
+ for(const n of contextGraphNodes.values()){
+  const angle=i++*2.399963229728653;
+  n.x=600+Math.cos(angle)*(75+50*Math.sqrt(i));
+  n.y=350+Math.sin(angle)*(75+50*Math.sqrt(i));
+  n.vx=0;n.vy=0;n.pinned=false;
+ }
+ contextGraphTransform();contextGraphUpdateGeometry();contextGraphResume();
+}
+function contextSVGPoint(e){
+ const p=contextSVG.createSVGPoint();p.x=e.clientX;p.y=e.clientY;
+ const matrix=contextSVG.getScreenCTM();
+ if(!matrix)return{x:600,y:360};
+ return p.matrixTransform(matrix.inverse());
+}
+function contextWorldPoint(e){
+ const p=contextSVGPoint(e);
+ return{x:(p.x-contextOffset.x)/contextScale,y:(p.y-contextOffset.y)/contextScale};
+}
+function contextGraphFocus(n){
+ contextScale=1.2;contextOffset={x:600-n.x*contextScale,y:360-n.y*contextScale};
+ contextGraphTransform();
+}
+function contextClosePreview(){document.getElementById('contextGraphPreview').classList.add('hidden');contextSelectedID=null}
+function showContextNode(p){
+ const preview=document.getElementById('contextGraphPreview');
+ const title=document.getElementById('contextDetailTitle');
+ const body=document.getElementById('contextDetailBody');
+ const open=document.getElementById('contextOpenObsidian');
+ const node=p.id?p:{type:p.note?'note':p.source?'folder':p.vault?'vault':'app',ref:p.note||p.source||null,label:p.vault?'Obsidian':p.source?.label||p.note?.title||'Integração',id:''};
+ contextSelectedID=node.id;contextSelectedNote=node.type==='note'?node.ref:null;
+ title.textContent=(node.type==='folder'?'📁 ':node.type==='note'?'◇ ':'◉ ')+node.label;
+ open.classList.toggle('hidden',!contextSelectedNote||!contextData.vault_selected);
+ preview.classList.remove('hidden');
+ if(node.type==='vault'){
+  body.textContent='Cofre Obsidian conectado: '+contextData.vault_name+'\n\nO Consecom utiliza a pasta Consecom/Contexto e não importa automaticamente outras notas do cofre.';
+ }else if(node.type==='app'){
+  body.textContent=(node.ref?.detail||'Aplicativo registrado')+'\n\nConexão de ferramenta e importação de histórico são operações distintas.';
+ }else if(node.type==='folder'){
+  const count=(contextData.notes||[]).filter(n=>n.source_id===node.ref?.id).length;
+  body.textContent='Pasta lógica: '+node.label+'\nFonte: '+(node.ref?.origin||'MCP')+'\n'+count+' nota(s) cadastrada(s).\n\nAs fontes aparecem agrupadas por origem. Um nó não comprova que todos os históricos do aplicativo já foram importados.';
+ }else if(node.type==='note'){
+  body.textContent='Lendo nota registrada...';
+  const id=node.ref?.id;
+  if(id)api('contexto/note/read',{id}).then(r=>{
+   if(contextSelectedNote?.id===id)body.textContent=(r.result.content||'Nota sem conteúdo').slice(0,24000);
+  }).catch(e=>{if(contextSelectedNote?.id===id)body.textContent=e.message});
+ }
+}
+function contextGraphContextMenu(e,node){
+ e.preventDefault();contextCloseMenu();
+ const menu=document.getElementById('contextGraphMenu');
+ const rect=contextCanvas.getBoundingClientRect();
+ menu.style.left=Math.max(5,Math.min(rect.width-200,e.clientX-rect.left))+'px';
+ menu.style.top=Math.max(5,Math.min(rect.height-150,e.clientY-rect.top))+'px';
+ function item(label,action){const b=dom('button',label);b.onclick=()=>{contextCloseMenu();action()};menu.append(b)}
+ item('Ver detalhes',()=>showContextNode(node));
+ item('Centralizar nó',()=>contextGraphFocus(node));
+ if(node.type==='note'&&contextData.vault_selected)item('Abrir no Obsidian',()=>{showContextNode(node);openContextInObsidian()});
+ if(node.type==='folder'&&contextData.vault_selected)item('Nova ideia',()=>openContextNote());
+ menu.classList.remove('hidden');
+}
+function contextCloseMenu(){document.getElementById('contextGraphMenu').classList.add('hidden');document.getElementById('contextGraphMenu').replaceChildren()}
+contextSVG.addEventListener('pointerdown',e=>{
+ if(e.button!==0)return;
+ contextCloseMenu();
+ const el=e.target.closest('.context-node');
+ const point=contextSVGPoint(e);
+ if(el){
+  const node=contextGraphNodes.get(el.getAttribute('data-node'));
+  if(!node)return;
+  contextDrag={type:'node',id:node.id,start:point,last:point,moved:false};
+  node.pinned=true;el.classList.add('dragging');
+ }else{
+  contextDrag={type:'pan',start:point,oldX:contextOffset.x,oldY:contextOffset.y,moved:false};
+  contextSVG.classList.add('dragging');
+ }
+ e.preventDefault();contextSVG.setPointerCapture(e.pointerId);
+});
+contextSVG.addEventListener('pointermove',e=>{
+ if(!contextDrag)return;
+ const point=contextSVGPoint(e),drag=contextDrag;
+ const diff=Math.hypot(point.x-drag.start.x,point.y-drag.start.y);
+ if(diff>5)drag.moved=true;
+ if(drag.type==='node'){
+  const n=contextGraphNodes.get(drag.id);
+  if(n){
+   n.x+=(point.x-drag.last.x)/contextScale;
+   n.y+=(point.y-drag.last.y)/contextScale;
+   n.vx=0;n.vy=0;
+   contextGraphUpdateGeometry();contextGraphResume();
+  }
+ }else{
+  contextOffset={x:drag.oldX+point.x-drag.start.x,y:drag.oldY+point.y-drag.start.y};
+  contextGraphTransform();
+ }
+ drag.last=point;
+});
+function contextFinishDrag(e){
+ if(!contextDrag)return;
+ const drag=contextDrag;contextDrag=null;
+ contextSVG.classList.remove('dragging');
+ if(drag.type==='node'){
+  const n=contextGraphNodes.get(drag.id);
+  contextGraphParts.get(drag.id)?.classList.remove('dragging');
+  if(n&&!drag.moved)showContextNode(n);
+  else contextGraphResume();
+ }else if(!drag.moved)contextClosePreview();
+ try{if(contextSVG.hasPointerCapture(e.pointerId))contextSVG.releasePointerCapture(e.pointerId)}catch{}
+}
+contextSVG.addEventListener('pointerup',contextFinishDrag);
+contextSVG.addEventListener('pointercancel',contextFinishDrag);
+contextSVG.addEventListener('contextmenu',e=>{
+ const el=e.target.closest('.context-node');
+ if(el){const n=contextGraphNodes.get(el.getAttribute('data-node'));if(n){contextGraphContextMenu(e,n);return}}
+ e.preventDefault();contextCloseMenu();
+});
+contextSVG.addEventListener('wheel',e=>{
+ if(activePage!=='context')return;
+ e.preventDefault();
+ const p=contextSVGPoint(e);
+ contextZoom(e.deltaY<0?1.12:1/1.12,p.x,p.y);
+},{passive:false});
+contextSVG.setAttribute('tabindex','0');
+contextSVG.addEventListener('keydown',e=>{
+ if(e.target!==contextSVG)return;
+ if(e.key==='+'||e.key==='='){e.preventDefault();contextZoom(1.2)}
+ if(e.key==='-'){e.preventDefault();contextZoom(1/1.2)}
+ const speed=e.shiftKey?60:24;
+ if(e.key==='ArrowUp'){contextOffset.y+=speed;e.preventDefault()}
+ if(e.key==='ArrowDown'){contextOffset.y-=speed;e.preventDefault()}
+ if(e.key==='ArrowLeft'){contextOffset.x+=speed;e.preventDefault()}
+ if(e.key==='ArrowRight'){contextOffset.x-=speed;e.preventDefault()}
+ contextGraphTransform();
+});
+document.addEventListener('keydown',e=>{
+ if(e.key==='Escape'&&activePage==='context'){
+  contextCloseMenu();contextClosePreview();document.getElementById('contextGraphSettings').classList.add('hidden');
+ }
+});
+
 async function reloadContext(){
  return (async()=>{
  try{
@@ -239,7 +582,7 @@ async function reloadContext(){
  btn.textContent=contextData.vault_selected?'✓ Reconectar':'Conectar automaticamente';
  btn.disabled=!r.obsidian_detected;
  drawContext();
- renderContextExplorer();
+ drawContext();
  await loadContextIntegrations();
  }catch(e){toast('Contexto: '+e.message,true)}
  })()
@@ -282,7 +625,7 @@ async function loadContextIntegrations(){
    }
    box.append(card);
   }
-  renderContextExplorer();
+  drawContext();
  }catch(e){box.replaceChildren(dom('p','Falha ao consultar integrações: '+e.message));}
  })()
 }
