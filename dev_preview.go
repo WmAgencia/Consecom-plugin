@@ -1,7 +1,6 @@
 package main
 
 import (
- "bytes"
  "encoding/json"
  "errors"
  "fmt"
@@ -102,8 +101,7 @@ func (a *App) previewStart(rootID string,port int,approved bool)(any,error){
  if runtime.GOOS=="windows"{
   cmd=exec.Command("cmd.exe","/D","/S","/C",args)
  }else{
-  cmd=exec.Command("npm","run","dev","--",strings.TrimSpace(strings.Split(args,"-- ")[1]))
-  // Non-Windows is not the shipping product; preserve argument separation.
+  // On Unix keep every argument separate; never invoke a shell.
   opt:=[]string{"run","dev","--"}
   if framework=="next"{opt=append(opt,"--hostname")}else{opt=append(opt,"--host")}
   opt=append(opt,"127.0.0.1","--port",strconv.Itoa(port))
@@ -117,8 +115,8 @@ func (a *App) previewStart(rootID string,port int,approved bool)(any,error){
  if err=cmd.Start();err!=nil{a.devPreviews.mu.Unlock();return nil,fmt.Errorf("falha ao iniciar servidor: %w",err)}
  preview:=&DevPreview{ID:newID(),RootID:rootID,Framework:framework,URL:fmt.Sprintf("http://127.0.0.1:%d",port),Port:port,Started:time.Now(),Status:"running",cmd:cmd}
  a.devPreviews.sessions[preview.ID]=preview
- a.devPreviews.mu.Unlock()
  preview.timer=time.AfterFunc(devPreviewMaxDuration,func(){_,_=a.previewStop(preview.ID)})
+ a.devPreviews.mu.Unlock()
  go func(){
   err:=cmd.Wait()
   a.devPreviews.mu.Lock()
@@ -205,4 +203,3 @@ func (a *App) previewCheck(id string)(any,error){
  },nil
 }
 
-var _ = bytes.MinRead
