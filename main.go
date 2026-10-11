@@ -146,7 +146,7 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 			pErr = pe.Error()
 		}
 		power, _ := a.boosterStatus()
-		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
+		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "context": a.dashboardContext(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
 	case "/api/browser/options":
 		content(w, a.browserOptions())
 	case "/api/browser/default":
