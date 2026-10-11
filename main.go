@@ -181,6 +181,21 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
         if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
         if a.live==nil{respond(w,nil,errors.New("chat Consecom indisponivel"));return}
         respond(w,a.live.chatHistory(),nil)
+    case "/api/live/latency":
+        if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
+        if a.live==nil{respond(w,nil,errors.New("diagnostico indisponivel"));return}
+        respond(w,a.live.latencyReport(),nil)
+    case "/api/live/displayed":
+        if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
+        var p struct{
+            EventID string `json:"event_id"`
+            ReplyID string `json:"reply_id"`
+            ObservedAt string `json:"observed_at"`
+        }
+        if !decode(w,r,&p){return}
+        if a.live==nil{respond(w,nil,errors.New("chat indisponivel"));return}
+        recorded,err:=a.live.markPanelDisplayed(p.EventID,p.ReplyID,p.ObservedAt)
+        respond(w,map[string]any{"recorded":recorded},err)
     case "/api/live/messages":
         if r.Method!="GET"{http.Error(w,"GET necessario",405);return}
         if a.live==nil{respond(w,nil,errors.New("fila Consecom Live indisponivel"));return}

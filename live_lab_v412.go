@@ -30,6 +30,9 @@ type LiveEvent struct {
  CreatedAt string `json:"created_at"`
  Delivery string `json:"delivery,omitempty"`
  ClaimedAt string `json:"claimed_at,omitempty"`
+ FollowUpAt string `json:"followup_at,omitempty"`
+ HostResolvedAt string `json:"host_resolved_at,omitempty"`
+ PanelDisplayedAt string `json:"panel_displayed_at,omitempty"`
 }
 type LiveHostReport struct {
  ID string `json:"id"`
@@ -156,25 +159,34 @@ func (b *LiveLab) get(id string)(LiveEvent,bool){
  for _,ev:=range b.events{if ev.ID==id{return ev,true}}
  return LiveEvent{},false
 }
-func (b *LiveLab) report(id,mode,status string)error{
- if !liveEventPattern.MatchString(id){return errors.New("invalid synthetic event id")}
+func (b *LiveLab) report(id,mode,status string,observations ...string)error{
+ if !liveEventPattern.MatchString(id){return errors.New("invalid live event id")}
  if mode!="auto"&&mode!="manual"{return errors.New("invalid mode")}
  switch status {
  case "attempt","host_rejected","host_resolved","unavailable","pending":
  default:return errors.New("invalid host status")
  }
+ observedAt:=""
+ if len(observations)>0{observedAt=observations[0]}
+ stamp,err:=liveObservedAt(observedAt)
+ if err!=nil{return err}
  b.mu.Lock();defer b.mu.Unlock()
  found:=false
  for i,ev:=range b.events {
   if ev.ID!=id {continue}
   found=true
-  if ev.Kind=="PANEL_MESSAGE" && ev.Delivery=="claimed" {
+  if ev.Kind=="PANEL_MESSAGE" {
    next:=ev
-   switch status {
-   case "host_resolved": next.Delivery="host_resolved"
-   case "host_rejected","unavailable": next.Delivery="host_rejected"
+   // Milestones are captured in the widget; host completion does not mean model completion.
+   if status=="attempt" && next.FollowUpAt=="" && ev.Delivery!="queued" && ev.Delivery!="superseded" {next.FollowUpAt=stamp}
+   if status=="host_resolved" && next.HostResolvedAt=="" && ev.Delivery!="queued" && ev.Delivery!="superseded" {next.HostResolvedAt=stamp}
+   if ev.Delivery=="claimed" {
+    switch status {
+    case "host_resolved": next.Delivery="host_resolved"
+    case "host_rejected","unavailable": next.Delivery="host_rejected"
+    }
    }
-   if next.Delivery!=ev.Delivery {
+   if next!=ev {
     updated:=append([]LiveEvent(nil),b.events...)
     updated[i]=next
     if err:=b.saveLocked(b.seq,updated);err!=nil{return err}
@@ -221,7 +233,8 @@ func liveToolSpecs()[]LiveTool{
   {Name:"consecom_live_reportar_host",Description:"Registrar resultado da tentativa do widget no host. Nao confirma se o modelo acordou.",InputSchema:schema(map[string]any{
    "id":str("ID do evento sintetico"),
    "mode":map[string]any{"type":"string","enum":[]string{"auto","manual"}},
-   "status":map[string]any{"type":"string","enum":[]string{"attempt","host_rejected","host_resolved","unavailable","pending"}}},"id","mode","status"),Annotations:obs,
+   "status":map[string]any{"type":"string","enum":[]string{"attempt","host_rejected","host_resolved","unavailable","pending"}},
+   "observed_at":map[string]any{"type":"string","description":"Timestamp RFC3339 do widget, sem texto da mensagem."}},"id","mode","status"),Annotations:obs,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
   {Name:"consecom_live_assumir_mensagem",Description:"Reivindicar atomicamente uma mensagem manual do painel para impedir envio duplicado por widgets simultaneos.",InputSchema:schema(map[string]any{"id":str("ID de mensagem evt-000001")},"id"),Annotations:obs,
    Meta:map[string]any{"ui":map[string]any{"visibility":[]string{"app"}},"openai/widgetAccessible":true}},
@@ -231,6 +244,7 @@ func liveToolSpecs()[]LiveTool{
    "tipo":map[string]any{"type":"string","enum":[]string{"andamento","final"}},
    "chave":map[string]any{"type":"string","maxLength":80,"description":"Chave opcional para evitar duplicacao de chamadas, letras, numeros, hifen e underscore."},
   },"id","texto","tipo"),Annotations:obs},
+  {Name:"consecom_chat_diagnostico",Description:"Diagnostico estruturado da latencia por etapa do chat, sem conteudo das mensagens.",InputSchema:schema(map[string]any{}),Annotations:readonly},
   {Name:"consecom_chat_historico",Description:"Consultar perguntas do painel e respostas publicadas, na ordem, para manter uma conversa bidirecional dentro da Central de Controle.",InputSchema:schema(map[string]any{}),Annotations:readonly},
   {Name:"consecom_live_resultados",Description:"Consultar tentativas feitas pelo componente Live LAB e seu retorno sem dados privados.",InputSchema:schema(map[string]any{}),Annotations:readonly},
  }
@@ -285,7 +299,9 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
   key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
   mode,err:=liveArgString(m,"mode");if err!=nil{return nil,err}
   status,err:=liveArgString(m,"status");if err!=nil{return nil,err}
-  if err:=a.live.report(key,mode,status);err!=nil{return nil,err}
+  var observedAt string
+  if len(m["observed_at"])>0{if err=json.Unmarshal(m["observed_at"],&observedAt);err!=nil{return nil,errors.New("observed_at invalido")}}
+  if err:=a.live.report(key,mode,status,observedAt);err!=nil{return nil,err}
   v=map[string]any{"ok":true}
  case "consecom_chat_responder":
   key,err:=liveArgString(m,"id");if err!=nil{return nil,err}
@@ -296,6 +312,7 @@ func (a *App) liveCall(ctx context.Context,name string,raw json.RawMessage)(map[
   reply,err:=a.live.publishChatReply(key,txt,kind,dedupe);if err!=nil{return nil,err}
   v=map[string]any{"ok":true,"reply":reply,"dashboard":"http://127.0.0.1:8765/"}
  case "consecom_chat_historico":v=a.live.chatHistory()
+  case "consecom_chat_diagnostico":v=a.live.latencyReport()
  case "consecom_live_resultados":v=a.live.reportsView()
  default:return nil,errors.New("unknown Live LAB tool")
  }

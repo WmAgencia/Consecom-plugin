@@ -73,7 +73,7 @@ func TestChatToolsExposedInSameMCP(t *testing.T){
  if !strings.Contains(liveTestJSON(hist),"Tudo operando normalmente."){t.Fatal("model reply not persisted")}
 }
 func TestChatDashboardUIAndPrompt(t *testing.T){
- for _,part:=range []string{"Chat com ChatGPT","live-chat-stream","live-chat-bubble","api('live/chat'","api('live/send'","Versão 4.14.1"}{
+ for _,part:=range []string{"Chat com ChatGPT","live-chat-stream","live-chat-bubble","api('live/chat'","api('live/send'","Versão 4.14.2"}{
   if !strings.Contains(uiHTML,part){t.Fatalf("chat UI missing %q",part)}
  }
  if !strings.Contains(liveWidgetHTML,"consecom_chat_responder"){t.Fatal("widget does not instruct model to publish reply")}
@@ -81,7 +81,7 @@ func TestChatDashboardUIAndPrompt(t *testing.T){
 }
 func TestChatFastPathTelemetryAndMeasuredLatency(t *testing.T){
  followup:=strings.Index(liveWidgetHTML,"const followUp=fn({prompt:prompt,scrollToBottom:false})")
- telemetry:=strings.Index(liveWidgetHTML,"observe(ev,mode,\"attempt\")")
+ telemetry:=strings.Index(liveWidgetHTML,"observe(ev,mode,\"attempt\",dispatchedAt)")
  if followup<0||telemetry<0||followup>=telemetry{t.Fatal("Host message must be dispatched before telemetry RPC")}
  if !strings.Contains(liveWidgetHTML,"retryMs=300*Math.pow(2,retry)"){t.Fatal("Missing fast transient claim retry")}
  if !strings.Contains(liveWidgetHTML,"failures=Math.min(failures+1,5)"){t.Fatal("Missing bounded MCP reconnect backoff")}

@@ -33,10 +33,10 @@ function extract(response){
  if(response.content){for(const p of response.content){if(p.type==="text"){try{return JSON.parse(p.text)}catch(_){}}}}
  return response;
 }
-function observe(ev,mode,result){
+function observe(ev,mode,result,observedAt){
  const fn=window.openai&&window.openai.callTool;
  if(typeof fn!=="function")return;
- Promise.resolve(fn("consecom_live_reportar_host",{id:ev.id,mode:mode,status:result})).catch(function(){});
+ Promise.resolve(fn("consecom_live_reportar_host",{id:ev.id,mode:mode,status:result,observed_at:observedAt||new Date().toISOString()})).catch(function(){});
 }
 function ask(ev,manual){
  if(!ev||!/^evt-[0-9]{6}$/.test(ev.id))return;
@@ -58,12 +58,13 @@ function ask(ev,manual){
  setTimeout(function(){if(!settled)observe(ev,mode,"pending")},6000);
  try{
   // Start the host follow-up BEFORE telemetry: an extra MCP call must not delay the user message.
-  const followUp=fn({prompt:prompt,scrollToBottom:false});
-  observe(ev,mode,"attempt");
+  const dispatchedAt=new Date().toISOString();
+   const followUp=fn({prompt:prompt,scrollToBottom:false});
+  observe(ev,mode,"attempt",dispatchedAt);
   Promise.resolve(followUp).then(function(result){
    settled=true;
    if(result&&result.isError){observe(ev,mode,"host_rejected");notice("O host recusou "+ev.id+".");return}
-   observe(ev,mode,"host_resolved");
+   observe(ev,mode,"host_resolved",new Date().toISOString());
    notice(ev.id+" foi aceito pelo host. Confira a conversa.");
   }).catch(function(err){
    settled=true;observe(ev,mode,"host_rejected");
