@@ -15,6 +15,9 @@ import (
 // Consecom Live LAB is intentionally restricted to synthetic events.
 // No actual PC error, credentials, files or conversation data enter the lab.
 const liveResourceURI="ui://consecom/live/v2.html"
+// Existing ChatGPT conversations can retain an older tool metadata snapshot.
+// Keep v1 serving the CURRENT widget, not the retired synthetic-only widget.
+const liveLegacyResourceURI="ui://consecom/live/v1.html"
 const liveMaxEvents=50
 const liveMaxWait=12*time.Second
 var liveEventPattern=regexp.MustCompile("^evt-[0-9]{6}$")
