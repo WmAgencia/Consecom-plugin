@@ -111,7 +111,13 @@ async function claimAndSend(ev,manual){
  }
 }
 async function show(ev,ownedClaim=false){
- if(!ev||!/^evt-[0-9]{6}$/.test(ev.id)||seen.has(ev.id))return;
+ if(!ev||!/^evt-[0-9]{6}$/.test(ev.id))return;
+ if(seen.has(ev.id)){
+  // An earlier passive poll may have displayed this message without a claim.
+  // Dispatch only after THIS fast poll won its atomic ownership.
+  if(ownedClaim&&ev.kind==="PANEL_MESSAGE")ask(ev,false,true);
+  return;
+ }
  seen.add(ev.id);
  if(box.textContent==="Aguardando mensagens...")box.textContent="";
  const item=document.createElement("article"),title=document.createElement("strong"),msg=document.createElement("p"),btn=document.createElement("button");
