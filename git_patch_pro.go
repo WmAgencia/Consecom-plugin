@@ -74,7 +74,13 @@ func (a *App) gitPatchRequest(rootID,patch,test string)(any,error){
  if _,e=a.gitPatchCheck(rootID,patch);e!=nil{return nil,e}
  if test!=""&&test!="none"&&test!="go_test"&&test!="npm_test"&&test!="npm_lint" {return nil,errors.New("teste permitido: none,go_test,npm_test,npm_lint")}
  data,_:=json.Marshal(patchPayload{Patch:patch,Test:test})
- id,e:=a.queue(&Pending{Kind:"gitpatch",Path:root.Path,Content:string(data),Description:"Aplicar patch Git em "+root.Name+" e testar "+test+" (ate 12 arquivos; rollback automatico se falhar)"})
+ p:=&Pending{Kind:"gitpatch",Path:root.Path,Content:string(data),Description:"Aplicar patch Git em "+root.Name+" e testar "+test+" (ate 12 arquivos; rollback automatico se falhar)"}
+ if a.mode()=="maximum" {
+  result,e:=a.gitPatchApproved(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ id,e:=a.queue(p)
  if e!=nil{return nil,e}
  return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
@@ -124,7 +130,13 @@ func (a *App) gitPatchRollbackRequest(id string)(any,error){
  rec,e:=a.readPatchRecord(id);if e!=nil{return nil,e}
  allowed:=false;for _,r:=range a.roots(){if filepath.Clean(r.Path)==filepath.Clean(rec.Root)&&r.Writable{allowed=true}}
  if !allowed{return nil,errors.New("pasta nao autorizada para reverter")}
- approval,e:=a.queue(&Pending{Kind:"gitrollback",Action:id,Path:rec.Root,Description:"Reverter apenas as alteracoes do patch Consecom "+id+" em "+rec.Root})
+ p:=&Pending{Kind:"gitrollback",Action:id,Path:rec.Root,Description:"Reverter apenas as alteracoes do patch Consecom "+id+" em "+rec.Root}
+ if a.mode()=="maximum" {
+  result,e:=a.gitPatchRollbackApproved(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ approval,e:=a.queue(p)
  if e!=nil{return nil,e};return map[string]any{"status":"aguardando_aprovacao_local","approval_id":approval},nil
 }
 func (a *App) readPatchRecord(id string)(patchRecord,error){
@@ -152,7 +164,13 @@ func (a *App) gitBranchRequest(rootID,branch string)(any,error){
  root,e:=a.getRoot(rootID);if e!=nil{return nil,e}
  if !root.Writable{return nil,errors.New("escrita desativada no projeto")}
  if !branchNameSafe.MatchString(branch)||strings.Contains(branch,"..")||strings.HasSuffix(branch,".")||strings.HasSuffix(branch,".lock")||strings.Contains(branch,"//"){return nil,errors.New("nome de branch invalido")}
- id,e:=a.queue(&Pending{Kind:"gitbranch",Path:root.Path,Action:branch,Description:"Criar e trocar para branch Git "+branch+" no projeto "+root.Name})
+ p:=&Pending{Kind:"gitbranch",Path:root.Path,Action:branch,Description:"Criar e trocar para branch Git "+branch+" no projeto "+root.Name}
+ if a.mode()=="maximum" {
+  result,e:=a.gitBranchApproved(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ id,e:=a.queue(p)
  if e!=nil{return nil,e};return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
 func (a *App) gitBranchApproved(p *Pending)(string,error){
