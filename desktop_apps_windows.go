@@ -88,7 +88,10 @@ func validRegisteredApp(id string) (InstalledWindowsApp,error) {
 
 func launchRegisteredWindowsApp(id string)(string,error){
  app,err:=validRegisteredApp(id);if err!=nil{return "",err}
- explorer,err:=exec.LookPath("explorer.exe");if err!=nil{return "",err}
+ windir:=os.Getenv("WINDIR")
+ if windir==""{return "",errors.New("diretorio do Windows indisponivel")}
+ explorer:=filepath.Join(windir,"explorer.exe")
+ if st,err:=os.Stat(explorer);err!=nil||!st.Mode().IsRegular(){return "",errors.New("Explorer oficial do Windows indisponivel")}
  // A single Shell Namespace argument, never a cmd.exe/PowerShell command.
  // No arbitrary executable, URL, arguments, protocol or elevated verb is used.
  cmd:=exec.Command(explorer,`shell:AppsFolder\`+app.AppID)
