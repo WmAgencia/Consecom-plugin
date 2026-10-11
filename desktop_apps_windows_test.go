@@ -24,7 +24,7 @@ func TestPortableExecutableIsLocalArgumentFreeAndProtected(t *testing.T){
  good:=filepath.Join(dir,"test-app.exe")
  if err:=os.WriteFile(good,[]byte("fake exe, never launched"),0600);err!=nil{t.Fatal(err)}
  if got,err:=validatePortableWindowsExe(good);err!=nil||got!=filepath.Clean(good){t.Fatalf("safe local file rejected: %q %v",got,err)}
- for _,bad:=range []string{"", "cmd /c calc", "\\\\server\\share\\evil.exe", filepath.Join(dir,"script.cmd"), filepath.Join(dir,"nothing.exe")}{
+ for _,bad:=range []string{"", "cmd /c calc", `\\\\server\\share\\evil.exe`, filepath.Join(dir,"script.cmd"), filepath.Join(dir,"nothing.exe")}{
   if _,err:=validatePortableWindowsExe(bad);err==nil{t.Errorf("unsafe or missing executable accepted: %q",bad)}
  }
  if windir:=os.Getenv("WINDIR");windir!=""{
