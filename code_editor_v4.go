@@ -103,11 +103,9 @@ func (a *App) codeEditApproved(p *Pending)(string,error){
  if strings.Count(string(b),req.Old)!=1{return "",errors.New("trecho original nao e unico")}
  result:=strings.Replace(string(b),req.Old,req.New,1)
  if len(result)>1024*1024||!utf8.ValidString(result){return "",errors.New("resultado invalido")}
- // Backup preserva o conteudo original antes de qualquer escrita.
- backupDir:=filepath.Join(filepath.Dir(a.path),"editor-backups")
- if e=os.MkdirAll(backupDir,0700);e!=nil{return "",e}
- backupID:=newID()
- if e=os.WriteFile(filepath.Join(backupDir,backupID+".bak"),b,0600);e!=nil{return "",e}
+ // Backup original e manifesto de restauracao com verificacao SHA256.
+ backupID,e:=saveEditorBackup(a,req.RootID,req.Path,b,codeSHA([]byte(result)))
+ if e!=nil{return "",e}
  // Sidecar temporario usa acesso exclusivo e e removido em falhas.
  tmp:=path+".consecom-"+newID()+".tmp"
  fd,e:=os.OpenFile(tmp,os.O_WRONLY|os.O_CREATE|os.O_EXCL,0600);if e!=nil{return "",e}
