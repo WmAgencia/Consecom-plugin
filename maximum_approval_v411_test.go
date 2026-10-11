@@ -60,3 +60,18 @@ func TestMaximumDoesNotOverrideBrowserChoiceOrUpdateOptIn(t *testing.T){
  if a.updateStatus().RemoteApproved{t.Fatal("remote updates silently enabled by maximum")}
  if len(a.roots())!=0{t.Fatal("maximum automatically added an unapproved project root")}
 }
+
+
+func TestMaximumDiscardsOldPromptsButNotRemoteUpdate(t *testing.T) {
+ a,err:=NewApp(filepath.Join(t.TempDir(),"config.json"));if err!=nil{t.Fatal(err)}
+ for _,kind:=range []string{"dev","codeedit","workflow","desktop","browserconfirm","update"}{
+  if _,err=a.queue(&Pending{Kind:kind,Description:"simulated request"});err!=nil{t.Fatal(err)}
+ }
+ if len(a.pendings())!=6{t.Fatal("fixture must start with six prompts")}
+ if err=a.setMode("maximum","LIBERAR");err!=nil{t.Fatal(err)}
+ pending:=a.pendings()
+ if len(pending)!=1||pending[0]["kind"]!="update"{t.Fatalf("stale prompts remained after enabling maximum: %#v",pending)}
+ if a.mode()!="maximum"{t.Fatal("mode lost during cleanup")}
+ if err=a.setMode("always","");err!=nil{t.Fatal(err)}
+ if len(a.pendings())!=1{t.Fatal("mode change unexpectedly executed or modified remote-update prompt")}
+}
