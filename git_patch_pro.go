@@ -72,7 +72,7 @@ func (a *App) gitPatchCheck(rootID,patch string)(any,error){
 func (a *App) gitPatchRequest(rootID,patch,test string)(any,error){
  root,e:=a.getRoot(rootID);if e!=nil{return nil,e}
  if _,e=a.gitPatchCheck(rootID,patch);e!=nil{return nil,e}
- if test!=""&&test!="none"&&test!="go_test"&&test!="npm_test"&&test!="npm_lint" {return nil,errors.New("teste permitido: none,go_test,npm_test,npm_lint")}
+ if test!=""&&test!="none"&&test!="go_test"&&test!="npm_test"&&test!="npm_lint"&&test!="npm_build"&&test!="npm_quality" {return nil,errors.New("teste permitido: none,go_test,npm_test,npm_lint,npm_build,npm_quality")}
  data,_:=json.Marshal(patchPayload{Patch:patch,Test:test})
  p:=&Pending{Kind:"gitpatch",Path:root.Path,Content:string(data),Description:"Aplicar patch Git em "+root.Name+" e testar "+test+" (ate 12 arquivos; rollback automatico se falhar)"}
  if a.mode()=="maximum" {
@@ -116,6 +116,7 @@ func (a *App) gitPatchApproved(p *Pending)(string,error){
  return "Patch aplicado; backup reversivel ID "+id,nil
 }
 func runApprovedPatchTest(root Root,act string)(string,error){
+ if act=="npm_quality" {return runQualityGate(root)}
  argv,ok:=longDevActions[act];if !ok||!jobNeedsApproval(act){return "",errors.New("teste nao autorizado")}
  ctx,cancel:=context.WithTimeout(context.Background(),95*time.Second);defer cancel()
  var cmd *exec.Cmd
