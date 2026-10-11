@@ -155,6 +155,19 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-compose .live-item b{font-size:11px;color:#8ddbbf;white-space:nowrap}
 .live-compose .live-item button{font-size:11px;padding:6px 9px}
 
+
+/* First-use activation. Collapsed by default to keep the main chat in view. */
+.consecom-onboarding{border:1px solid #285f73;border-radius:17px;background:linear-gradient(115deg,#122d3c,#14283f);padding:15px 18px;margin-bottom:14px}
+.consecom-onboarding-head{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.consecom-onboarding strong{font-size:14px;color:#e8f9ff}
+.consecom-onboarding p{font-size:12px;color:#adcbd9;line-height:1.6;margin:5px 0}
+.consecom-onboarding-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+.consecom-onboarding details{margin-top:8px;font-size:12px;color:#b9dce5}
+.consecom-onboarding summary{cursor:pointer;display:list-item;width:max-content;max-width:100%}
+.consecom-onboarding textarea{display:block;width:100%;margin-top:10px;resize:vertical;min-height:135px;max-height:290px;border-radius:11px;border:1px solid #31546c;background:#0a1c2b;color:#e5f5ff;padding:12px;font:12px/1.6 'Segoe UI',sans-serif}
+.consecom-onboarding .onboarding-note{color:#84aabe;font-size:11px}
+@media(max-width:680px){.consecom-onboarding{padding:13px}.consecom-onboarding-actions button{width:100%}}
+
 /* v4.14 - actual two-way transcript with separate message roles */
 .live-compose{margin:14px 0 22px;padding:0!important;border:1px solid #2b485c!important;border-radius:20px!important;background:#0b1827!important;box-shadow:0 12px 36px #0004!important;overflow:hidden}
 .live-chat-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px;border-bottom:1px solid #243d51;background:linear-gradient(115deg,#103a43,#15263b)}
@@ -187,8 +200,28 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-info{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:9px;color:#8aa9ba;font-size:11px}
 .live-chat-status{white-space:pre-wrap;max-width:100%}
 @media(max-width:680px){.live-chat-stream{padding:13px;max-height:400px}.live-chat-row{max-width:92%}.live-chat-editor{align-items:stretch}.live-chat-editor textarea{width:100%}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.5 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
-<section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.6 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+<section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><section class="consecom-onboarding" id="consecomOnboarding" aria-label="Ativar o Consecom nesta conversa">
+<div class="consecom-onboarding-head"><div>
+<strong>Ative o Consecom em uma conversa do ChatGPT</strong>
+<p>1. Instale o Consecom no Windows. 2. Conecte o plugin MCP ao ChatGPT. 3. Copie o prompt e envie em uma conversa.</p>
+</div><div class="consecom-onboarding-actions"><button type="button" class="primary" onclick="copyConsecomSetupPrompt()">⧉ Copiar prompt de ativação</button></div></div>
+<details><summary>Ver o prompt que será copiado</summary>
+<textarea id="consecomSetupPrompt" readonly spellcheck="false" aria-label="Prompt de ativação do Consecom Live">Ative esta conversa como minha sessão principal do Consecom Plugin.
+
+O programa Consecom deve estar instalado no Windows e o plugin MCP deve ter sido conectado manualmente a esta conta ChatGPT.
+
+1. Verifique a conexão real chamando atualizacao_status e consecom_chat_historico do Consecom. Se as ferramentas não aparecerem, peça para eu conectar/reativar o plugin e atualizar a página; não finja que está conectado.
+2. Chame consecom_live_abrir com modo="mensagens" e apresente o componente Consecom Live nesta conversa.
+3. Peça para eu manter marcado "Permitir envio automático das mensagens digitadas no painel" e o componente aberto enquanto quiser receber mensagens.
+4. Para cada mensagem recebida do painel Windows, responda normalmente e publique a resposta correspondente usando consecom_chat_responder com o ID exato da mensagem, texto completo e tipo="final". Em tarefas longas, use tipo="andamento" para comunicar o progresso e tipo="final" para concluir.
+5. Respeite as permissões e aprovações do Windows; nunca execute uma operação que exija autorização local sem a autorização necessária.
+6. Não use ChatGPT Work, API paga da OpenAI, segundo MCP ou um serviço de IA adicional.
+
+Ao concluir, confirme somente o que conseguiu verificar. O componente depende desta conversa estar ativa e pode ser suspenso pelo ChatGPT; não prometa conexão contínua em segundo plano.</textarea></details>
+<p class="onboarding-note" id="consecomSetupCopyStatus" role="status">O prompt abre o Live nesta conversa; não instala o programa nem garante funcionamento com o ChatGPT fechado.</p>
+</section>
+<div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
 <h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Conferindo se o Consecom Live está ativo...</p></div></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
@@ -233,6 +266,28 @@ const KEY='___TOKEN___';let state={roots:[],disks:[],agents:[],mode:'always'};le
 function dom(tag,text,cls){let e=document.createElement(tag);if(text!==undefined)e.textContent=String(text);if(cls)e.className=cls;return e}
 function toast(msg,bad=false){let e=document.getElementById('toast');e.textContent=msg;e.className='toast'+(bad?' bad':'');e.style.display='block';clearTimeout(window.toastHide);window.toastHide=setTimeout(()=>e.style.display='none',4500)}
 async function api(path,data){let opt={headers:{'X-Local-Key':KEY}};if(data!==undefined){opt.method='POST';opt.headers['Content-Type']='application/json';opt.body=JSON.stringify(data)}let r=await fetch('/api/'+path,opt);let text=await r.text();let v;try{v=JSON.parse(text)}catch{throw Error(text)}if(!r.ok||v.ok===false)throw Error(v.error||'Falha '+r.status);return v}
+
+async function copyConsecomSetupPrompt(){
+ const field=document.getElementById('consecomSetupPrompt'),status=document.getElementById('consecomSetupCopyStatus');
+ if(!field||!status)return;
+ try{
+  const prompt=field.value;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+   await navigator.clipboard.writeText(prompt);
+  }else{
+   field.closest('details').open=true;
+   field.focus();field.select();
+   if(!document.execCommand('copy'))throw Error('Cópia não autorizada');
+  }
+  status.textContent='Prompt copiado. Cole em uma conversa do ChatGPT que tenha o Consecom MCP conectado.';
+  toast('Prompt de ativação copiado.');
+ }catch(e){
+  field.closest('details').open=true;
+  field.focus();field.select();
+  status.textContent='Não foi possível copiar automaticamente. Selecione o texto exibido e copie manualmente.';
+  toast('Selecione e copie o prompt mostrado abaixo.',true);
+ }
+}
 
 let liveComposeBusy=false;
 let liveChatSignature='';
