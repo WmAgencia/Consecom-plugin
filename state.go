@@ -25,6 +25,7 @@ type Config struct {
 	DevBindings   []DevServiceBinding `json:"dev_bindings,omitempty"`
 	ContextVault string `json:"context_vault,omitempty"`
 	ContextSources []ContextSource `json:"context_sources,omitempty"`
+	ContextConnections map[string]bool `json:"context_connections,omitempty"`
 	ContextNotes []ContextNote `json:"context_notes,omitempty"`
 	PreviousPower string            `json:"previous_power,omitempty"`
 	ChangedPower  string            `json:"changed_power,omitempty"`
