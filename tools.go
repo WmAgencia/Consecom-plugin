@@ -102,6 +102,7 @@ func tools() []Tool {
 		{"programas_criativos","Detectar disponibilidade de FFmpeg, FFprobe, Blender, ImageMagick, Python e Node sem executar tarefas.",schema(map[string]any{}),readonly},
 		{"video_inspecionar","Ler metadados de video local do projeto com FFprobe, sem alterar o arquivo.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo .mp4 .mov .mkv .webm")},"root_id","caminho"),readonly},
 		{"video_extrair_frame","Extrair frame JPEG reduzido (ate 512 KiB) com FFmpeg em timestamp especifico, sem gravar arquivos no projeto.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo"),"segundos":map[string]any{"type":"number","minimum":0,"maximum":36000}},"root_id","caminho","segundos"),readonly},
+		{"video_diagnosticar","Analisar ate 20 segundos iniciais de video com FFmpeg procurando quadros pretos e congelamentos candidatos.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Video relativo")},"root_id","caminho"),readonly},
 		{"fluxo_iniciar","Executar fluxo de 1 a 6 comandos de desenvolvimento permitidos de forma sequencial, verificando cada saida, com cancelamento.",schema(map[string]any{"root_id":str("ID do projeto"),"etapas":map[string]any{"type":"array","minItems":1,"maxItems":6,"items":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}}},"root_id","etapas"),mutating},
 		{"fluxo_status","Verificar etapa, logs recentes e sucesso/falha de um fluxo em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),readonly},
 		{"fluxo_cancelar","Interromper fluxo e sua etapa atualmente em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),mutating},
@@ -180,6 +181,10 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		var secs float64
 		if e=json.Unmarshal(args["segundos"],&secs);e!=nil{return nil,e}
 		return a.videoFrame(id,path,secs)
+	case "video_diagnosticar":
+		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		path,e:=argStr(args,"caminho");if e!=nil{return nil,e}
+		return a.videoDiagnose(id,path)
 	case "fluxo_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		var steps []string
