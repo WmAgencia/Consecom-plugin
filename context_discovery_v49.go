@@ -49,7 +49,7 @@ func contextCLI(command string)(contextCLIInfo,bool) {
  }
  bases:=[]string{filepath.Join(appdata,"npm","node_modules"),filepath.Join(home,".npm-global","lib","node_modules"),
   filepath.Join(home,"AppData","Roaming","npm","node_modules"), filepath.Join(os.Getenv("ProgramFiles"),"nodejs","node_modules"),
-  filepath.Join("C:\","node_modules"),filepath.Join("D:\","node_modules")}
+  filepath.Join("C:\\","node_modules"),filepath.Join("D:\\","node_modules")}
  for _,base:=range bases{
   if script:=contextFindFile(filepath.Join(base,relative));script!="" {
    return contextCLIInfo{Binary:node,Prefix:[]string{script}},true
@@ -82,10 +82,10 @@ func contextWorkspaceClues() map[string]string {
   ".venv":true,"dist":true,"build":true}
  type entry struct{path string;level int}
  queue:=[]entry{}
- for _,root:=range []string{os.Getenv("USERPROFILE"),"C:\","D:\",
-  "C:\Projetos","D:\Projetos","C:\Projects","D:\Projects",
-  "C:\Repos","D:\Repos","C:\GitHub","D:\GitHub",
-  "D:\Desenvolvimento","D:\Dev","C:\Dev"}{
+ for _,root:=range []string{os.Getenv("USERPROFILE"),"C:\\","D:\\",
+  "C:\\Projetos","D:\\Projetos","C:\\Projects","D:\\Projects",
+  "C:\\Repos","D:\\Repos","C:\\GitHub","D:\\GitHub",
+  "D:\\Desenvolvimento","D:\\Dev","C:\\Dev"}{
   if root!="" {queue=append(queue,entry{root,0})}
  }
  seen:=map[string]bool{}
