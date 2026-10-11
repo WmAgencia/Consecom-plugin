@@ -113,3 +113,22 @@ Em **Aprovacao Maxima**, ambas as ferramentas de abertura executam diretamente, 
 Fluxo recomendado: procurar \`Relogio\` em \`desktop_aplicativos\`, escolher o \`app_id\` real, chamar \`desktop_abrir_instalado\`, verificar a janela com \`desktop_janelas\` e usar controle visual para configurar um alarme. **Abrir o aplicativo nao significa que um alarme foi criado**: confirme a configuracao na interface. Alarmes de aplicativos podem ser recorrentes; uma ocorrencia em dia especifico requer verificar o comportamento do Relogio instalado.
 
 Limites: a lista reflete os aplicativos que o perfil Windows atual registra no menu Iniciar; executaveis adicionais podem ser abertos pelo caminho absoluto. Aplicativos do sistema protegidos, comandos arbitrarios, scripts e elevacao UAC automatica continuam vedados.
+
+
+### 4.3.0 — Central de desenvolvimento: GitHub, Vercel, Supabase e Railway
+
+**Fluxo recomendado no ChatGPT:** Consecom (arquivos/terminal/build local) + conectores oficiais GitHub/Vercel/Supabase/Railway (projetos/deploy/banco/servicos). Os conectores sao independentes: a permissao OAuth no ChatGPT **nao** transfere tokens para o executavel do Windows. Nao e necessario copiar uma API key para o Consecom para usar essas quatro nuvens **atraves do ChatGPT**.
+
+Novas ferramentas MCP locais:
+- \`dev_integracoes_status\` — indica se Git, GitHub CLI (\`gh\`), Node.js, npm, Vercel CLI, Supabase CLI, Railway CLI e Go podem ser localizados no Windows, sem executar comandos, ler tokens ou verificar credenciais. Lista tambem quantas pastas de projeto foram autorizadas pelo usuario.
+- \`dev_projeto_inspecionar\` — dado um \`root_id\` ja aprovado no painel, verifica \`package.json\`, detecta framework (Next.js, Vite, Astro, React, Vue, Nuxt, Remix, SvelteKit, HTML) e informa **apenas os nomes** dos scripts npm e a presenca de arquivos de configuracao Vercel, Supabase, Railway e Git. Nunca le \`.env*\`, arquivos de credenciais ou \`.git/config\`; tambem nao executa scripts.
+
+Passos para desenvolver um site:
+1. Cadastre a pasta especifica do projeto no painel local Consecom, com escrita habilitada somente se precisar editar. Aprovacao Maxima nao adiciona pastas automaticamente.
+2. Rode \`dev_integracoes_status\`, \`dev_projeto_inspecionar\`, edicoes com backup e \`dev_job_iniciar\`/fluxos de build/teste.
+3. Use o conector GitHub do ChatGPT para criar branch, commits e PRs no repositorio selecionado.
+4. Use o conector Vercel para vincular/deployar, configurar dominios e ver logs no escopo certo.
+5. Use o conector Supabase para tabelas, SQL, migrations e edge functions do projeto escolhido, com revisao de alteracoes destrutivas.
+6. Use o conector Railway para projetos, servicos, ambientes, variaveis e deployments quando precisar de backend/worker.
+
+O plugin **nao** promete acesso irrestrito a contas desconhecidas, nao le nem salva tokens dos provedores, nao executa \`git push\` ou um deploy sem fluxo explicitamente solicitado e nao substitui permissoes dos conectores, escopos de equipe, autenticacao e UAC. Para uma execucao local independente do ChatGPT, autentique as CLIs em seu proprio PC pelos fluxos oficiais dos provedores; a verificacao de instalacao nao significa sessao autenticada.

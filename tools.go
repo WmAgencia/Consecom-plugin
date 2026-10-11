@@ -37,6 +37,8 @@ func tools() []Tool {
 		{"listar_processos", "Listar processos com maior consumo de memoria; apenas diagnostico.", schema(map[string]any{}), readonly},
 		{"pastas_autorizadas", "Listar apenas pastas de projeto autorizadas pelo usuario no painel local.", schema(map[string]any{}), readonly},
 		{"politica_aprovacao", "Informar modo efetivo de aprovacao do Consecom, prompts locais, quantidade de projetos autorizados e as permissoes que continuam independentes (cliente MCP, UAC, atualizacoes).", schema(map[string]any{}), readonly},
+		{"dev_integracoes_status","Diagnosticar disponibilidade local de Git, GitHub CLI, Node/npm, Vercel, Supabase e Railway sem ler credenciais, arquivos .env ou autenticar nas contas. O ChatGPT usa os conectores cloud separadamente.",schema(map[string]any{}),readonly},
+		{"dev_projeto_inspecionar","Identificar framework, scripts npm (somente nomes) e configuracao Git/Vercel/Supabase/Railway em uma pasta de projeto autorizada, sem ler segredos nem executar scripts.",schema(map[string]any{"root_id":str("ID da pasta de projeto autorizada no painel Consecom")},"root_id"),readonly},
 		{"listar_arquivos", "Listar ate 120 arquivos de texto e diretorios de uma pasta autorizada, sem caminhos confidenciais.", schema(map[string]any{"root_id": str("ID da pasta autorizada"), "caminho": str("Caminho relativo, como src ou src/components")}, "root_id", "caminho"), readonly},
 		{"ler_arquivo", "Ler somente arquivo UTF-8 de ate 64 KiB na pasta autorizada; segredos e arquivos ocultos sensiveis bloqueados.", schema(map[string]any{"root_id": str("ID da pasta autorizada"), "caminho": str("Caminho relativo do arquivo")}, "root_id", "caminho"), readonly},
 		{"terminal_restrito", "Executar somente comandos diagnosticos preaprovados: windows_version, git_status, git_branch, git_log; sem interpretador de comandos livre.", schema(map[string]any{"acao": map[string]any{"type": "string", "enum": []string{"windows_version", "git_status", "git_branch", "git_log"}}, "root_id": str("ID do projeto para comandos git (obrigatorio com git)")}, "acao"), readonly},
@@ -374,6 +376,11 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		return a.roots(), nil
 	case "politica_aprovacao":
 		return a.approvalPolicy(), nil
+	case "dev_integracoes_status":
+		return localDevStackStatus(a)
+	case "dev_projeto_inspecionar":
+		rootID,e:=argStr(args,"root_id");if e!=nil{return nil,e}
+		return a.devProjectInspect(rootID)
 	case "aprovacoes_pendentes":
 		return a.pendings(), nil
 	case "game_booster_estado":
