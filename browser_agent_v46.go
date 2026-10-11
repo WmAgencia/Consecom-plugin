@@ -43,7 +43,7 @@ func agentBrowserURL(raw string)(string,string,error){
  if !agentBrowserDomainRE.MatchString(host) || strings.Contains(host,".."){return "","",errors.New("dominio invalido")}
  if p:=u.Port();p!="" {n,err:=strconv.Atoi(p);if err!=nil||n<1||n>65535{return "","",errors.New("porta invalida")}}
  ip:=net.ParseIP(host)
- loopback:=host=="localhost" || (ip!=nil&&ip.IsLoopback())
+ loopback:=host=="localhost" || host=="127.0.0.1"
  if u.Scheme!="https"&&!(u.Scheme=="http"&&loopback){return "","",errors.New("somente HTTPS publico ou HTTP localhost autorizado")}
  if ip!=nil && !loopback {return "","",errors.New("enderecos IP externos/internos diretos nao sao aceitos")}
  if host=="localhost" && u.Port()==""{return "","",errors.New("para localhost, informe a porta de desenvolvimento")}
