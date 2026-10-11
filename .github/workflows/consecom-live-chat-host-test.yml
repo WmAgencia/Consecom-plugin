@@ -7,6 +7,10 @@ on:
       - .github/workflows/consecom-live-chat-host-test.yml
 permissions:
   contents: read
+  issues: write
+concurrency:
+  group: consecom-live-chat-host-test
+  cancel-in-progress: true
 jobs:
   isolated-chat-host:
     runs-on: ubuntu-latest
@@ -21,6 +25,8 @@ jobs:
           go test ./experiments/consecom-live-poc
           go build -o /tmp/consecom-live-chat-lab ./experiments/consecom-live-poc
       - name: Start temporary HTTPS tunnel and synthetic MCP
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -69,6 +75,9 @@ jobs:
             echo "This endpoint is read-only for MCP and **does not access your computer**."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "MCP_TEST_URL=$origin/mcp"
+          # Make the ephemeral URL visible while the job is RUNNING.
+          gh issue comment 20 --repo WmAgencia/Consecom-plugin --body "🧪 **Consecom Live Chat Host active:** \`$origin/mcp\` (no auth, synthetic-only, expires in about 18 minutes). Connect in Plugins and request consecom_live_abrir in an ordinary ChatGPT Chat. Run: https://github.com/WmAgencia/Consecom-plugin/actions/runs/$GITHUB_RUN_ID"
+
       - name: Keep test online and emit synthetic events
         shell: bash
         run: |
