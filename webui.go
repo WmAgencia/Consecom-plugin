@@ -29,7 +29,47 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .integration-card h3{font-size:14px;margin:0 0 7px}.integration-card p{font-size:12px;line-height:1.4;color:#a6c2d5;min-height:33px}
 .integration-card button{font-size:12px;padding:8px 12px}
 .integration-status{font-size:11px;color:#70d8af}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.8.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+
+/* Contexto: workspace three-pane inspired by graph knowledge apps */
+#contextPage{--ctxbg:#10151b;--ctxpanel:#161d26;--ctxstroke:#2c3945;--ctxmuted:#9caebd}
+#contextPage .top{margin-bottom:16px}
+#contextPage .context-hero{display:flex;align-items:center;justify-content:space-between;gap:18px;background:linear-gradient(115deg,#123a32,#192335 55%,#201f3a);border:1px solid #377964;border-radius:18px;padding:15px 20px;margin-bottom:14px;flex-wrap:wrap}
+#contextPage .context-hero strong{font-size:15px;display:block}
+#contextPage .context-hero p{font-size:12px;color:#b0c7ce;margin:5px 0 0}
+#contextPage .context-pill{color:#b9eeda;border:1px solid #50856e;background:#0b2c27;border-radius:999px;padding:7px 11px;font-size:12px}
+#contextPage .context-header{background:var(--ctxpanel);border:1px solid var(--ctxstroke);border-radius:13px;padding:10px 13px;margin-bottom:12px}
+#contextPage .context-workspace{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+#contextPage .context-layout{grid-template-columns:240px minmax(0,1fr) 295px;gap:10px;align-items:stretch}
+#contextPage .context-explorer{min-width:0;background:var(--ctxpanel);border:1px solid var(--ctxstroke);border-radius:15px;min-height:610px;padding:13px;overflow:auto}
+#contextPage .context-explorer h3{font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#8399a9;margin:0 0 11px}
+#contextPage .context-search{width:100%;min-width:0;background:#0e1520;border:1px solid #324456;border-radius:10px;padding:10px;color:#e6eff4;margin-bottom:14px}
+#contextPage .context-folder{width:100%;display:flex;gap:8px;align-items:center;background:transparent;border:0;text-align:left;padding:9px 10px;font-weight:500;font-size:12px;border-radius:9px;color:#d5e5e9}
+#contextPage .context-folder:hover,#contextPage .context-note-row:hover{background:#283747}
+#contextPage .context-folder .folder-glyph{color:#b6a6ec}
+#contextPage .context-folder .tree-count{margin-left:auto;color:#8b9bab;font-size:10px}
+#contextPage .context-folder.active{background:#173d35;border:1px solid #34765f}
+#contextPage .context-note-row{border:0;width:100%;display:block;text-align:left;background:none;color:#a6bccb;font-size:12px;padding:8px 8px 8px 28px;border-radius:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#contextPage .context-explorer-footer{font-size:11px;line-height:1.6;color:#76939a;border-top:1px solid #324252;padding-top:12px;margin-top:17px}
+#contextPage .context-canvas{background:radial-gradient(circle at 51% 48%,#182e32 0,#111d2b 47%,#10161f 85%);border-color:var(--ctxstroke)}
+#contextPage .context-canvas:after{content:'';position:absolute;inset:0;pointer-events:none;opacity:.17;background-image:radial-gradient(#80b49d .85px,transparent .85px);background-size:24px 24px}
+#contextPage .context-canvas svg{position:relative;z-index:1}
+#contextPage .context-node:hover{filter:drop-shadow(0 0 12px #56e6b377)}
+#contextPage .context-detail{background:var(--ctxpanel);border-color:var(--ctxstroke)}
+#contextPage .context-detail h3{color:#e5f4f6}
+#contextPage .context-info{background:#0f1922;border:1px solid #2c3b49;border-radius:10px;padding:12px;min-height:175px}
+#contextPage .context-meta{line-height:1.6}
+#contextPage .context-toolbar{position:absolute;left:12px;top:12px;z-index:2;background:#13232ccf;border:1px solid #314c55;border-radius:10px;padding:8px 11px;font-size:11px;color:#acd8ce}
+#contextPage .integrations-title{display:flex;align-items:center;gap:9px}
+#contextPage .integration-card{background:linear-gradient(145deg,#172532,#12202a);border-color:#294856;transition:transform .18s,border-color .18s}
+#contextPage .integration-card:hover{transform:translateY(-2px);border-color:#3a9477}
+#contextPage .integration-card h3{font-size:15px}
+#contextPage .integration-card p{min-height:35px}
+#contextPage .integration-status{display:inline-block;border-radius:999px;background:#163f33;padding:4px 8px;color:#85e8bf}
+#contextPage .integration-hint{display:block;overflow-wrap:anywhere;color:#8ea8b4;font-size:10px;margin-top:8px}
+#contextPage .context-vault-advanced{font-size:11px;color:#96b4c7}
+@media(max-width:1220px){#contextPage .context-layout{grid-template-columns:210px minmax(0,1fr)}#contextPage .context-detail{grid-column:1/-1;min-height:180px}}
+@media(max-width:760px){#contextPage .context-layout{grid-template-columns:1fr}#contextPage .context-explorer{min-height:180px;max-height:380px}#contextPage .context-canvas{height:420px}#contextPage .context-detail{grid-column:auto}}
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.9.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header>
 <div class="metrics"><div class="metric"><small>RAM em uso</small><strong id="ramUsed">—</strong><div class="more" id="ramTotal">Memória física</div><div class="bar"><i id="ramUsedBar"></i></div></div><div class="metric"><small>RAM disponível</small><strong id="ramFree">—</strong><div class="more">Disponível no Windows</div><div class="bar"><i id="ramFreeBar"></i></div></div><div class="metric"><small>CPU</small><strong id="cpu">—</strong><div class="more">Uso total medido</div><div class="bar"><i id="cpuBar"></i></div></div><div class="metric clickable" id="diskTile" role="button" tabindex="0" onclick="nextDisk()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nextDisk()}"><div class="drive-controls"><button onclick="event.stopPropagation();nextDisk(-1)" title="Disco anterior">‹</button><button onclick="event.stopPropagation();nextDisk(1)" title="Próximo disco">›</button></div><small id="diskLabel">Disco (—)</small><strong id="diskUsed">—</strong><div class="more" id="diskTotal">Clique para alternar</div><div class="bar"><i id="diskBar"></i></div></div><div class="metric server"><small>Servidor MCP</small><strong style="font-size:19px" id="serverStatus"><span class="dot"></span> Em execução</strong><div class="more" id="uptime">—</div></div></div>
 <div class="columns"><section class="panel"><div class="panelheader"><span class="section-icon">⬡</span><div><h2>Modo de aprovação e permissões</h2><div class="muted">Decida quando autorizar ações solicitadas pelo ChatGPT.</div></div></div><div class="choices"><button class="choice" id="modeAlways" onclick="setMode('always')"><span class="symbol">☏</span><strong>Perguntar sempre</strong><small>Confirma cada alteração no computador.</small></button><button class="choice" id="modeCategory" onclick="setMode('category')"><span class="symbol">☷</span><strong>Aprovar por categoria</strong><small>Gravação em projetos autorizados sem perguntas repetidas.</small></button><button class="choice" id="modeMaximum" onclick="setMode('maximum')"><span class="symbol">♛</span><strong>Aprovação máxima</strong><small>Executa automaticamente as ferramentas permitidas, inclusive Windows, terminal, Git e navegador. Restrições técnicas continuam.</small></button></div><div id="pendingWrap" class="hidden" style="margin-top:16px;padding:12px;background:#122c40;border:1px solid #3d5d73;border-radius:11px"><b id="pendingTitle">Aprovações pendentes</b><div id="pendingList"></div></div></section><section class="panel"><div class="panelheader"><span class="section-icon">▣</span><div><h2>Escopo de acesso</h2><div class="muted">Arquivos e projetos disponíveis pelas permissões escolhidas.</div></div></div><div class="scope"><span class="scope-icon">📁</span><div><strong id="scopeTitle">Pastas aprovadas</strong><p id="scopeDesc">Carregando permissões...</p></div></div><div class="scopeextra" id="scopeActions"><button onclick="openModal('folders')">Gerenciar pastas aprovadas</button></div></section></div>
@@ -40,10 +80,11 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 
 <section id="contextPage" class="hidden">
 <header class="top"><div><h1>Contexto</h1><div class="sub">Mapa de conhecimento • fontes MCP, ideias conectadas e notas Markdown sincronizadas ao Obsidian.</div></div><div class="top-actions"><button onclick="reloadContext()">↻ Atualizar</button><button onclick="openContextSource()">＋ Fonte</button><button class="primary" onclick="openContextNote()">＋ Nova ideia</button></div></header>
-<div class="context-header"><div class="context-control"><span class="muted">Cofre Obsidian</span><select id="contextVaultSelect"><option value="">Selecione um cofre detectado</option></select><button onclick="selectContextVault()">Conectar cofre</button><span class="muted" id="contextSync">Sem cofre selecionado</span></div><div class="context-legend"><span><i style="background:#4dc7ff"></i>Cliente MCP</span><span><i style="background:#3ee0af"></i>Ideia / nota</span><span><i style="background:#c098ff"></i>Relação</span></div></div>
+<div class="context-hero"><div><strong>◎ Cofre de conhecimento</strong><p>Fontes conectadas, pastas e ideias em um só mapa. Sincronização restrita a Consecom/Contexto.</p></div><span class="context-pill" id="contextHeroState">Descobrindo cofre...</span></div>
+<div class="context-header"><div class="context-workspace"><span class="muted">◈ Obsidian</span><b id="contextVaultName">Nenhum cofre conectado</b><span class="muted" id="contextSync">Aguardando detecção</span><button class="primary" onclick="connectObsidianAuto()" id="contextAutoVaultBtn">Conectar automaticamente</button><details class="context-vault-advanced"><summary>Trocar cofre</summary><select id="contextVaultSelect"><option value="">Carregando...</option></select><button onclick="selectContextVault()">Usar este cofre</button></details></div><div class="context-legend"><span><i style="background:#57cbaa"></i>Aplicativos</span><span><i style="background:#a899ed"></i>Pastas</span><span><i style="background:#68beee"></i>Notas</span></div></div>
 <div class="integrations-title">Integrações disponíveis <span class="muted">— detecção e conexão pelo Windows</span></div>
 <div id="contextIntegrations" class="integration-cards"><span class="muted">Procurando aplicativos compatíveis...</span></div>
-<div class="context-layout"><div class="context-canvas" id="contextCanvas"><svg id="contextSVG" viewBox="0 0 900 610" aria-label="Grafo interativo de fontes e ideias" role="img"></svg><div class="context-empty" id="contextEmpty">Nenhuma fonte registrada ainda.<p>Conecte um cliente MCP ou clique em <strong>＋ Fonte</strong> para começar.</p></div></div><aside class="context-detail"><h3 id="contextDetailTitle">Explorar conhecimento</h3><p class="context-info" id="contextDetailBody">Clique em uma bolinha para ver a fonte ou a ideia. As notas são salvas apenas na pasta Consecom/Contexto do cofre escolhido.</p><div class="context-control" style="margin-top:18px"><button onclick="contextZoom(.8)">＋</button><button onclick="contextZoom(1.25)">−</button><button onclick="contextReset()">◎ Centralizar</button><button id="contextOpenObsidian" onclick="openContextInObsidian()" disabled>Abrir no Obsidian ↗</button></div><p class="context-meta" id="contextCounters">0 fontes • 0 notas</p><p class="context-meta">O histórico completo do ChatGPT não é transmitido automaticamente. Envie resumos autorizados pelo MCP ou importe um arquivo exportado posteriormente.</p></aside></div>
+<div class="context-layout"><nav class="context-explorer" aria-label="Explorador de fontes e notas"><h3>Explorador</h3><input class="context-search" id="contextSearchInput" placeholder="⌕ Buscar fontes e notas" aria-label="Buscar no Contexto" oninput="renderContextExplorer()"><div id="contextExplorerTree"></div><div class="context-explorer-footer">Mostra apenas fontes registradas e notas geradas pelo Consecom. Não lê automaticamente seus outros documentos.</div></nav><div class="context-canvas" id="contextCanvas"><span class="context-toolbar">◎ Grafo de relações · arraste para navegar</span><svg id="contextSVG" viewBox="0 0 900 610" aria-label="Grafo interativo de fontes e ideias" role="img"></svg><div class="context-empty" id="contextEmpty">Nenhuma fonte registrada ainda.<p>Conecte um cliente MCP ou clique em <strong>＋ Fonte</strong> para começar.</p></div></div><aside class="context-detail"><h3 id="contextDetailTitle">Explorar conhecimento</h3><p class="context-info" id="contextDetailBody">Clique em uma bolinha para ver a fonte ou a ideia. As notas são salvas apenas na pasta Consecom/Contexto do cofre escolhido.</p><div class="context-control" style="margin-top:18px"><button onclick="contextZoom(.8)">＋</button><button onclick="contextZoom(1.25)">−</button><button onclick="contextReset()">◎ Centralizar</button><button id="contextOpenObsidian" onclick="openContextInObsidian()" disabled>Abrir no Obsidian ↗</button></div><p class="context-meta" id="contextCounters">0 fontes • 0 notas</p><p class="context-meta">O histórico completo do ChatGPT não é transmitido automaticamente. Envie resumos autorizados pelo MCP ou importe um arquivo exportado posteriormente.</p></aside></div>
 </section>
 </main></div><div class="modalback" id="modalBack" onclick="if(event.target===this)closeModal()"><div class="modal" role="dialog" aria-modal="true"><div id="modalContent"></div><div class="group" style="margin-top:17px"><button onclick="closeModal()">Fechar</button></div></div></div><div id="toast" class="toast"></div><script>
 const KEY='___TOKEN___';let state={roots:[],disks:[],agents:[],mode:'always'};let selectedDisk=0;let fetching=false;let activePage='panel';let agentViews={};let transform={x:0,y:0,z:1};let dragging=null;
@@ -176,49 +217,122 @@ contextCanvas.addEventListener('pointerdown',e=>{if(e.target.closest('.context-n
 contextCanvas.addEventListener('pointermove',e=>{if(!contextDrag)return;let b=contextCanvas.getBoundingClientRect();contextOffset.x=contextDrag.offsetX+(e.clientX-contextDrag.x)*900/b.width;contextOffset.y=contextDrag.offsetY+(e.clientY-contextDrag.y)*610/b.height;drawContext()});
 contextCanvas.addEventListener('pointerup',()=>contextDrag=null);
 async function reloadContext(){
+ return (async()=>{
  try{
- let r=(await api('contexto')).result;contextData=r.graph||{sources:[],notes:[]};
- let select=document.getElementById('contextVaultSelect'),old=select.value;select.replaceChildren();let ph=dom('option','Escolha um cofre Obsidian detectado');ph.value='';select.append(ph);
- for(let v of r.detected_vaults||[]){let opt=dom('option',v.name+' — '+v.path);opt.value=v.id;select.append(opt)}
- if(old&&[...select.options].some(x=>x.value===old))select.value=old;
- else if(contextData.vault_selected){const available=(r.detected_vaults||[]).find(v=>v.name===contextData.vault_name);if(available)select.value=available.id}
- mark('contextSync',contextData.vault_selected?'Sincronização ativa: '+contextData.vault_name:(r.obsidian_detected?'Escolha um cofre para ativar':'Obsidian não detectado no computador'));
+ const r=(await api('contexto')).result;
+ contextData=r.graph||{sources:[],notes:[]};
+ const select=document.getElementById('contextVaultSelect');
+ const previous=select.value;select.replaceChildren();
+ const ph=dom('option','Cofres detectados');ph.value='';select.append(ph);
+ for(const vault of r.detected_vaults||[]){
+  const opt=dom('option',vault.name);opt.value=vault.id;select.append(opt);
+ }
+ if(previous&&[...select.options].some(o=>o.value===previous))select.value=previous;
+ else if(contextData.vault_selected){
+  const found=(r.detected_vaults||[]).find(v=>v.name===contextData.vault_name);
+  if(found)select.value=found.id;
+ }
+ mark('contextVaultName',contextData.vault_selected?contextData.vault_name:'Aguardando conexão');
+ mark('contextSync',contextData.vault_selected?'· sincronização ativa':r.obsidian_detected?'· detectado':'· não encontrado');
+ mark('contextHeroState',contextData.vault_selected?'● Cofre conectado':'○ Sem cofre conectado');
+ const btn=document.getElementById('contextAutoVaultBtn');
+ btn.textContent=contextData.vault_selected?'✓ Reconectar':'Conectar automaticamente';
+ btn.disabled=!r.obsidian_detected;
  drawContext();
+ renderContextExplorer();
  await loadContextIntegrations();
  }catch(e){toast('Contexto: '+e.message,true)}
-}
-async function selectContextVault(){
+ })()
+}async function selectContextVault(){
  let id=document.getElementById('contextVaultSelect').value;if(!id){toast('Selecione um cofre existente',true);return}
  if(!confirm('Permitir ao Consecom criar notas apenas na pasta Consecom/Contexto deste cofre Obsidian?'))return;
  try{await api('contexto/vault/select',{id});toast('Cofre vinculado');await reloadContext()}catch(e){toast(e.message,true)}
 }
 async function loadContextIntegrations(){
+ return (async()=>{
  const box=document.getElementById('contextIntegrations');if(!box)return;
  try{
   const payload=(await api('contexto/integracoes')).result;
+  window.contextIntegrationItems=payload.integrations||[];
   box.replaceChildren();
-  for(const integration of payload.integrations||[]){
+  for(const item of window.contextIntegrationItems){
    const card=dom('div',undefined,'integration-card');
-   const title=dom('h3',integration.label);
-   const state=integration.observed?'Cliente observado (nao autenticado)':integration.configured?'Configurado':integration.detected?'Detectado':'Nao detectado';
-   card.append(title,dom('small',state,'integration-status'),dom('p',integration.detail));
-   if(integration.supported&&!integration.configured){
-    const button=dom('button','Conectar','primary');
-    button.onclick=async()=>{
-     if(!confirm('Configurar '+integration.label+' no Windows? O Consecom usara somente a CLI oficial ou um cofre reconhecido.'))return;
-     button.disabled=true;
+   const title=dom('h3',(item.id==='chatgpt'?'◉ ':item.id==='obsidian'?'◆ ':'▣ ')+item.label);
+   let state=item.id==='chatgpt'?(item.observed?'MCP em uso':item.ready?'Túnel conectado':item.configured?'Configurado':'Desconectado'):(item.ready?'Conectado':item.observed?'Observado anteriormente':item.configured?'Configurado':item.detected?'Detectado':'Não detectado');
+   card.append(title,dom('span',state,'integration-status'),dom('p',item.detail));
+   if(item.workspace_hint)card.append(dom('small','Pasta identificada: '+item.workspace_hint,'integration-hint'));
+   if(item.supported&&!item.configured){
+    const btn=dom('button','Conectar','primary');
+    btn.onclick=async()=>{
+     if(!confirm('Configurar '+item.label+' no Consecom?'))return;
+     btn.disabled=true;btn.textContent='Conectando...';
      try{
-      await api('contexto/integracoes/conectar',{id:integration.id});
-      toast(integration.label+' configurado; verificacao MCP depende do cliente.');
+      const result=(await api('contexto/integracoes/conectar',{id:item.id})).result;
+      toast(item.label+' configurado; conexão MCP será validada quando o cliente responder.');
       await reloadContext();
-     }catch(e){toast(e.message,true);button.disabled=false}
+     }catch(e){toast(e.message,true);btn.disabled=false;btn.textContent='Tentar novamente'}
     };
-    card.append(button);
+    card.append(btn);
+   }else if(item.workspace_hint&&!item.configured&&!item.supported){
+    const index=dom('button','Adicionar ao grafo');
+    index.onclick=async()=>{try{await api('contexto/integracoes/indexar',{id:item.id});toast('Fonte registrada; aplicativo MCP ainda não conectado.');await reloadContext()}catch(e){toast(e.message,true)}};
+    card.append(index);
+   }else if(item.id==='chatgpt'&&!item.ready){
+    const btn=dom('button','Configurar túnel');btn.onclick=()=>openModal('connection');card.append(btn);
    }
    box.append(card);
   }
- }catch(e){box.replaceChildren(dom('p','Falha ao detectar integracoes: '+e.message));}
+  renderContextExplorer();
+ }catch(e){box.replaceChildren(dom('p','Falha ao consultar integrações: '+e.message));}
+ })()
 }
+async function connectObsidianAuto(){
+ const btn=document.getElementById('contextAutoVaultBtn');
+ btn.disabled=true;btn.textContent='Conectando...';
+ try{
+  const r=(await api('contexto/vault/auto',{})).result;
+  toast('Cofre '+r.name+' conectado automaticamente');
+  await reloadContext();
+ }catch(e){toast('Obsidian: '+e.message,true);btn.disabled=false;btn.textContent='Conectar automaticamente'}
+}
+function renderContextExplorer(){
+ const tree=document.getElementById('contextExplorerTree');if(!tree)return;
+ tree.replaceChildren();
+ const query=(document.getElementById('contextSearchInput')?.value||'').trim().toLowerCase();
+ const sources=contextData.sources||[];
+ const notes=contextData.notes||[];
+ const integrations=window.contextIntegrationItems||[];
+ function folder(text,count,click){
+  const btn=dom('button',undefined,'context-folder');
+  btn.append(dom('span','▸','folder-glyph'),dom('span',text),dom('span',count,'tree-count'));
+  btn.onclick=click;return btn;
+ }
+ // The ChatGPT tunnel appears first even before its first model handshake.
+ const chat=integrations.find(v=>v.id==='chatgpt');
+ if(chat&&('chatgpt'.includes(query)||query==='')){
+  const row=folder('ChatGPT',chat.observed?'em uso':chat.ready?'túnel pronto':'inativo',()=>{mark('contextDetailTitle','ChatGPT');mark('contextDetailBody',chat.detail)});
+  tree.append(row);
+ }
+ if(contextData.vault_selected&&(!query||contextData.vault_name.toLowerCase().includes(query)||'obsidian'.includes(query))){
+  tree.append(folder('Obsidian · '+contextData.vault_name,'cofre',()=>showContextNode({vault:true})));
+ }
+ for(const source of [...sources].sort((a,b)=>a.label.localeCompare(b.label,'pt-BR'))){
+  const children=notes.filter(n=>n.source_id===source.id&&(!query||n.title.toLowerCase().includes(query)));
+  if(query&&!source.label.toLowerCase().includes(query)&&children.length===0)continue;
+  const wrap=dom('div');
+  const row=folder(source.label,children.length+' notas',()=>{wrap.classList.toggle('collapsed');showContextNode({source});});
+  wrap.append(row);
+  const content=dom('div');
+  for(const n of children){
+   const btn=dom('button','◇ '+n.title,'context-note-row');
+   btn.title=n.title;btn.onclick=()=>showContextNode({note:n});content.append(btn);
+  }
+  if(!children.length){const placeholder=dom('small','Sem notas neste grupo');placeholder.style.cssText='color:#7799a5;margin:7px 0 10px 27px;display:block';content.append(placeholder)}
+  wrap.append(content);tree.append(wrap);
+ }
+ if(!tree.children.length){tree.append(dom('p','Nenhum resultado para esta busca.','context-meta'))}
+}
+
 function openContextInObsidian(){
  if(!contextSelectedNote||!contextData.vault_selected||!contextData.vault_name){toast('Selecione uma nota do cofre conectado',true);return}
  let relative='Consecom/Contexto/'+contextSelectedNote.filename;
