@@ -40,6 +40,7 @@ type App struct {
 	browserControl BrowserControl
 	devJobs DevJobManager
 	workflows WorkflowManager
+	renders RenderManager
 }
 type ProcessTarget struct {
 	PID  int    `json:"pid"`
