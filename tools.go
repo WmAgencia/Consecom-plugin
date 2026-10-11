@@ -104,6 +104,7 @@ func tools() []Tool {
 		{"fluxo_iniciar","Executar fluxo de 1 a 6 comandos de desenvolvimento permitidos de forma sequencial, verificando cada saida, com cancelamento.",schema(map[string]any{"root_id":str("ID do projeto"),"etapas":map[string]any{"type":"array","minItems":1,"maxItems":6,"items":map[string]any{"type":"string","enum":[]string{"git_status","git_diff","git_log","go_test","go_build","npm_test","npm_build","npm_lint"}}}},"root_id","etapas"),mutating},
 		{"fluxo_status","Verificar etapa, logs recentes e sucesso/falha de um fluxo em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),readonly},
 		{"fluxo_cancelar","Interromper fluxo e sua etapa atualmente em execucao.",schema(map[string]any{"id":str("ID do fluxo")},"id"),mutating},
+		{"fluxo_historico","Listar ate 20 fluxos recentes, inclusive execucoes anteriores a reinicializacao do Consecom, com estado real.",schema(map[string]any{}),readonly},
 		{"aprovacoes_pendentes", "Mostrar pedidos aguardando aprovacao no painel do proprio PC; o chat nao pode aprova-los.", schema(map[string]any{}), readonly},
 	}
 }
@@ -183,6 +184,8 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 	case "fluxo_cancelar":
 		id,e:=argStr(args,"id");if e!=nil{return nil,e}
 		return a.workflowCancel(id)
+	case "fluxo_historico":
+		return a.workflowListHistory()
 	case "dev_job_iniciar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		action,e:=argStr(args,"acao");if e!=nil{return nil,e}
