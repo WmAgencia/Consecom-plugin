@@ -95,6 +95,8 @@ func tools() []Tool {
 		{"codigo_buscar","Pesquisar texto em ate 250 arquivos de codigo de um projeto autorizado, retornando trecho e numero da linha.",schema(map[string]any{"root_id":str("ID do projeto"),"termo":str("Termo de busca")}, "root_id","termo"),readonly},
 		{"codigo_ler_trecho","Ler ate 160 linhas de codigo com numero de linha e SHA256 para edicao segura.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"inicio":map[string]any{"type":"integer","minimum":1},"quantidade":map[string]any{"type":"integer","minimum":1,"maximum":160}},"root_id","caminho","inicio","quantidade"),readonly},
 		{"codigo_substituir_trecho","Substituir trecho unico no codigo com SHA256 de versao e backup, dentro de projeto com escrita permitida.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 retornado por codigo_ler_trecho"),"original":str("Texto exato a substituir"),"novo":str("Texto substituto")}, "root_id","caminho","sha256","original","novo"),mutating},
+		{"codigo_previsualizar_diff","Previsualizar diferencas antes de editar codigo; confirma SHA256 e unicidade sem gravar no disco.",schema(map[string]any{"root_id":str("ID do projeto"),"caminho":str("Arquivo relativo"),"sha256":str("SHA256 da leitura"),"original":str("Trecho original exato"),"novo":str("Trecho proposto")}, "root_id","caminho","sha256","original","novo"),readonly},
+		{"codigo_restaurar_backup","Restaurar um backup de codigo pelo ID registrado na edicao; exige checksum do arquivo atual e copia preventiva.",schema(map[string]any{"id":str("ID do backup retornado na edicao")},"id"),mutating},
 		{"desktop_controles","Encontrar controles Win32 visiveis associados a uma janela, como botoes, menus e campos.",schema(map[string]any{"window":str("ID da janela")},"window"),readonly},
 		{"desktop_controle_clicar","Clicar no centro de um controle Win32 valido, na propria janela. Respeita modo de aprovacao local.",schema(map[string]any{"window":str("ID da janela"),"controle":str("ID do controle obtido em desktop_controles")},"window","controle"),mutating},
 		{"programas_criativos","Detectar disponibilidade de FFmpeg, FFprobe, Blender, ImageMagick, Python e Node sem executar tarefas.",schema(map[string]any{}),readonly},
@@ -124,6 +126,18 @@ func (a *App) dispatch(name string, raw json.RawMessage) (any, error) {
 		}
 	}
 	switch name {
+	case "codigo_previsualizar_diff":
+		req:=EditorEdit{}
+		var e error
+		req.RootID,e=argStr(args,"root_id");if e!=nil{return nil,e}
+		req.Path,e=argStr(args,"caminho");if e!=nil{return nil,e}
+		req.ExpectedSHA,e=argStr(args,"sha256");if e!=nil{return nil,e}
+		req.Old,e=argStr(args,"original");if e!=nil{return nil,e}
+		req.New,e=argStr(args,"novo");if e!=nil{return nil,e}
+		return a.codeDiffPreview(req)
+	case "codigo_restaurar_backup":
+		id,e:=argStr(args,"id");if e!=nil{return nil,e}
+		return a.codeRestoreRequest(id)
 	case "codigo_buscar":
 		id,e:=argStr(args,"root_id");if e!=nil{return nil,e}
 		term,e:=argStr(args,"termo");if e!=nil{return nil,e}
@@ -508,6 +522,8 @@ func (a *App) approve(id string) (string, error) {
 		return a.approveDesktop(p)
 	case "codeedit":
 		return a.codeEditApproved(p)
+	case "coderestore":
+		return a.codeRestoreApproved(p)
 	case "winchild":
 		return a.approveDesktopElement(p)
 	case "workflow":
