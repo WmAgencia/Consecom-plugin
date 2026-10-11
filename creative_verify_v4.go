@@ -12,7 +12,8 @@ import (
 func verifyCreativeProgram(name,executable string)(string,error){
  var args []string
  switch name{
- case "FFmpeg","FFprobe","ImageMagick","Blender":args=[]string{"-version"}
+ case "FFmpeg","FFprobe","ImageMagick":args=[]string{"-version"}
+ case "Blender":args=[]string{"--version"}
  case "Python":args=[]string{"--version"}
  case "Node":args=[]string{"--version"}
  default:return "",errors.New("programa desconhecido")
