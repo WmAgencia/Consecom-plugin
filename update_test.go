@@ -110,8 +110,8 @@ func TestUpdaterToolsExposed(t *testing.T) {
 			t.Fatalf("missing updater tool %s", name)
 		}
 	}
-	if len(tools()) != 96 {
-		t.Fatalf("expected 96 tools got %d", len(tools()))
+	if len(tools()) != 98 {
+		t.Fatalf("expected 98 tools got %d", len(tools()))
 	}
 }
 
