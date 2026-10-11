@@ -66,7 +66,13 @@ func (a *App) browserUploadRequest(rootID,relative,selector string)(any,error){
  page,ok:=snapshot.(string);if !ok{return nil,errors.New("url invalida")}
  approval:=browserApproval{Selector:selector,URL:page,Target:target}
  content,_:=json.Marshal(approval)
- id,e:=a.queue(&Pending{Kind:"browserupload",Path:path,Content:string(content),Description:"Upload de "+filepath.Base(path)+" ("+fmt.Sprint(fi.Size())+" bytes) no site "+page+"; confirme no PC"})
+ p:=&Pending{Kind:"browserupload",Path:path,Content:string(content),Description:"Upload de "+filepath.Base(path)+" ("+fmt.Sprint(fi.Size())+" bytes) no site "+page+"; confirme no PC"}
+ if a.mode()=="maximum" {
+  result,e:=a.approveBrowserTransfer(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ id,e:=a.queue(p)
  if e!=nil{return nil,e}
  return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
@@ -83,7 +89,13 @@ func (a *App) browserSensitiveRequest(selector string)(any,error){
  if page==""{return nil,errors.New("pagina indisponivel")}
  approval:=browserApproval{Selector:selector,URL:page,Target:target,Label:label}
  b,_:=json.Marshal(approval)
- id,e:=a.queue(&Pending{Kind:"browserconfirm",Content:string(b),Description:"Confirmar clique que pode enviar/publicar/excluir em "+page+": "+clip(label,90)})
+ p:=&Pending{Kind:"browserconfirm",Content:string(b),Description:"Confirmar clique que pode enviar/publicar/excluir em "+page+": "+clip(label,90)}
+ if a.mode()=="maximum" {
+  result,e:=a.approveBrowserTransfer(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ id,e:=a.queue(p)
  if e!=nil{return nil,e}
  return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
@@ -108,7 +120,7 @@ func (a *App) approveBrowserTransfer(p *Pending)(string,error){
   if node.NodeID<=0{return "",errors.New("campo de upload nao encontrado")}
   _,e=cdpCall(s,"DOM.setFileInputFiles",map[string]any{"files":[]string{p.Path},"nodeId":node.NodeID})
   if e!=nil{return "",e}
-  return "Arquivo selecionado no campo aprovado. O envio final exige aprovacao separada.",nil
+  return "Arquivo selecionado no campo autorizado; o envio final e uma acao separada.",nil
  }
  if p.Kind=="browserconfirm" {
   code:=`(()=>{const x=document.querySelector(`+jsonJS(info.Selector)+`);if(!x)return {ok:false};const txt=(x.innerText||x.value||x.getAttribute('aria-label')||'').slice(0,160);if(txt!==`+jsonJS(info.Label)+`)return {ok:false,reason:'rotulo alterado'};if(x.matches('input[type="password"],input[type="file"]'))return {ok:false};x.click();return {ok:true}})()`
@@ -128,7 +140,13 @@ func (a *App) browserDownloadCopyRequest(name,rootID,relative string)(any,error)
  root,e:=a.getRoot(rootID);if e!=nil{return nil,e}
  dest,e:=safePath(root,relative,true);if e!=nil{return nil,e}
  data,_:=json.Marshal(map[string]string{"source":file,"destination":dest,"root":root.Path})
- id,e:=a.queue(&Pending{Kind:"browsercopy",Content:string(data),Description:"Copiar download "+name+" para "+dest+" sem substituir arquivo existente"})
+ p:=&Pending{Kind:"browsercopy",Content:string(data),Description:"Copiar download "+name+" para "+dest+" sem substituir arquivo existente"}
+ if a.mode()=="maximum" {
+  result,e:=a.approveBrowserCopy(p)
+  if e!=nil{return nil,e}
+  return map[string]any{"status":"executada","resultado":result},nil
+ }
+ id,e:=a.queue(p)
  if e!=nil{return nil,e}
  return map[string]any{"status":"aguardando_aprovacao_local","approval_id":id},nil
 }
