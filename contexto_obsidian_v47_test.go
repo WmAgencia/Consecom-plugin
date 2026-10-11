@@ -101,7 +101,7 @@ func TestHybridBrowserRouteRequiresSafeURL(t *testing.T){
  if _,err=a.hybridBrowserOpen("file:///C:/secret");err==nil{t.Fatal("unsafe URL accepted")}
  if _,err=a.hybridBrowserOpen("http://169.254.1.1:3000");err==nil{t.Fatal("internal IP accepted")}
  st,err:=a.hybridBrowserStatus();if err!=nil{t.Fatal(err)}
- if st.(map[string]any)["fallback_engine"]!="consecom-cdp"{t.Fatal("native fallback missing")}
+ if st.(map[string]any)["primary_engine"]!="consecom-cdp"{t.Fatal("exclusive browser must be primary")}
 }
 func TestContextToolsAreDeclared(t *testing.T){
  required:=map[string]bool{
