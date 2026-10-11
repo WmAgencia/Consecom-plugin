@@ -23,6 +23,9 @@ type Config struct {
 	Token         string            `json:"token"`
 	Roots         []Root            `json:"roots"`
 	DevBindings   []DevServiceBinding `json:"dev_bindings,omitempty"`
+	ContextVault string `json:"context_vault,omitempty"`
+	ContextSources []ContextSource `json:"context_sources,omitempty"`
+	ContextNotes []ContextNote `json:"context_notes,omitempty"`
 	PreviousPower string            `json:"previous_power,omitempty"`
 	ChangedPower  string            `json:"changed_power,omitempty"`
 	ApprovalMode  string            `json:"approval_mode,omitempty"`
