@@ -2,7 +2,7 @@
 
 Integração controlada entre o ChatGPT e um computador Windows por meio de um servidor MCP local e túnel privado.
 
-**Versão atual do projeto:** 3.0.0
+**Versão atual do projeto:** 3.0.1
 
 ## Recursos
 
@@ -50,3 +50,9 @@ Não existe shell arbitrário, upload silencioso, acesso direto às credenciais 
 
 ### Atualizar
 O repositório oficial é `WmAgencia/Consecom-plugin`; use **Atualizar** no menu esquerdo. O instalador verifica versão, SHA-256 e reinicia o servidor. Depois atualize o catálogo de ferramentas do plugin no ChatGPT para que as 59 operações apareçam.
+
+## v3.0.1 — Aprovação máxima consistente
+
+Quando o usuário habilita **Aprovação máxima** no próprio painel (confirmação `LIBERAR`), as operações permitidas das ferramentas v3 passam a executar diretamente, sem uma nova aprovação para cada ação: abrir e controlar janelas, capturar telas, builds/scripts autorizados, operações de Git e transferências/cliques no navegador. Nos modos **Sempre perguntar** e **Por categoria** continuam valendo os requisitos de aprovação anteriores.
+
+**Importante:** Aprovação máxima elimina a aprovação local repetida, não as restrições técnicas. Comandos continuam limitados à lista permitida, Git/builds precisam de pasta de projeto autorizada, áreas de sistema/credenciais e caminhos perigosos continuam bloqueados, e o navegador só controla a sessão selecionada. A política independente de atualização remota do programa não é alterada.
