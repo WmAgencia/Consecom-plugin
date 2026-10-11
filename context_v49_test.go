@@ -26,17 +26,25 @@ func TestV49ObsidianOneClickPrefersOpenVault(t *testing.T){
  value,e=a.contextVaultAuto();if e!=nil||value.(map[string]any)["name"]!=filepath.Base(original){t.Fatalf("auto reconnect failed: %v %v",value,e)}
 }
 
-func TestV49ContextUIExplorerAndNoRequiredVaultDropdown(t *testing.T) {
+func TestV410ContextUIInfiniteGraphOnly(t *testing.T) {
  required:=[]string{
-  "id=\"contextExplorerTree\"","id=\"contextSearchInput\"",
-  "function renderContextExplorer()","function connectObsidianAuto()",
+  "id=\"contextGraphSearch\"","id=\"contextGraphPreview\"",
+  "function contextGraphBuild()","function contextGraphTick()",
+  "function contextGraphContextMenu(","function contextFinishDrag(",
+  "function connectObsidianAuto()",
   "id=\"contextAutoVaultBtn\"","contexto/vault/auto",
-  "ChatGPT","Obsidian","context-canvas","context-detail",
+  "ChatGPT","Obsidian","context-graph-infinite","context-graph-settings",
  }
  for _,part:=range required{if !strings.Contains(uiHTML,part){t.Errorf("missing Contexto UI feature %q",part)}}
- if strings.Contains(uiHTML,"<span class=\"muted\">Cofre Obsidian</span><select"){
-  t.Fatal("primary vault flow still forces dropdown")
+ graphStart:=strings.Index(uiHTML,"<section id=\"contextPage\"")
+ graphEnd:=strings.Index(uiHTML,"</section>",graphStart)
+ if graphStart<0||graphEnd<0{t.Fatal("Contexto markup not found")}
+ section:=uiHTML[graphStart:graphEnd]
+ for _,unwanted:=range []string{"class=\"context-hero\"","class=\"context-explorer\"","class=\"context-detail\"","id=\"contextExplorerTree\""}{
+  if strings.Contains(section,unwanted){t.Errorf("unwanted fixed panel %q",unwanted)}
  }
+ if !strings.Contains(section,"id=\"contextIntegrations\"")||!strings.Contains(section,"id=\"contextSVG\""){t.Fatal("cards and infinite graph missing")}
+ 
  if len(integrationNames)==0||integrationNames[0].ID!="chatgpt"{
   t.Fatal("ChatGPT is not the first listed integration")
  }
