@@ -73,7 +73,7 @@ func TestChatToolsExposedInSameMCP(t *testing.T){
  if !strings.Contains(liveTestJSON(hist),"Tudo operando normalmente."){t.Fatal("model reply not persisted")}
 }
 func TestChatDashboardUIAndPrompt(t *testing.T){
- for _,part:=range []string{"Chat com ChatGPT","live-chat-stream","live-chat-bubble","api('live/chat'","api('live/send'","Versão 4.14.1"}{
+ for _,part:=range []string{"Chat com ChatGPT","live-chat-stream","live-chat-bubble","api('live/chat'","api('live/send'","Versão 4.14.2"}{
   if !strings.Contains(uiHTML,part){t.Fatalf("chat UI missing %q",part)}
  }
  if !strings.Contains(liveWidgetHTML,"consecom_chat_responder"){t.Fatal("widget does not instruct model to publish reply")}
