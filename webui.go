@@ -268,16 +268,20 @@ async function refreshConsecomChat(force=false){
     bridgeLabel.style.color=bridge.status==='ready'?'#7cddba':'#e4ae73';
    }
    const lastPending=[...messages].reverse().find(m=>m.role==='user'&&m.status==='queued');
-   if(lastPending){
+   let queueWarning='';
+   if(lastPending&&!bridge.automatic_ready){
     const age=Date.now()-Date.parse(lastPending.created_at);
-    if(Number.isFinite(age)&&age>15000&&!bridge.automatic_ready){
-     mark('liveComposeState','A mensagem está na fila há '+Math.round(age/1000)+'s. Consecom Live não está confirmado como ativo; abra ou reabra o componente no ChatGPT.');
+    if(Number.isFinite(age)&&age>15000){
+     queueWarning='A mensagem está na fila há '+Math.round(age/1000)+'s. Reabra o Consecom Live no ChatGPT.';
     }
    }
    const awaiting=messages.filter(m=>m.role==='user'&&m.status!=='answered'&&m.status!=='superseded'&&m.status!=='host_rejected'&&(m.status==='host_resolved'||Boolean(m.dispatched_at))).filter(m=>!messages.some(r=>r.role==='assistant'&&r.kind==='final'&&r.event_id===m.event_id));
    const typingFor=awaiting.length?awaiting[awaiting.length-1].event_id:'';
    const sig=messages.map(x=>x.id+':'+x.status+':'+(x.dispatched_at||'')).join('|')+'|typing:'+typingFor;
-  if(!force&&sig===liveChatSignature)return;
+  if(!force&&sig===liveChatSignature){
+   if(queueWarning)mark('liveComposeState',queueWarning);
+   return;
+  }
   liveChatSignature=sig;
   const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<90;
   const fragment=document.createDocumentFragment();
@@ -337,8 +341,9 @@ async function refreshConsecomChat(force=false){
   liveChatBooted=true;
   const last=messages[messages.length-1];
   if(last){
-   if(last.role==='assistant'&&last.kind==='final')mark('liveComposeState','Resposta recebida do ChatGPT.');
+   if(queueWarning)mark('liveComposeState',queueWarning);
    else if(typingFor)mark('liveComposeState','Mensagem encaminhada ao ChatGPT. Aguardando a resposta...');
+   else if(last.role==='assistant'&&last.kind==='final')mark('liveComposeState','Resposta recebida do ChatGPT.');
    else if(last.role==='user')mark('liveComposeState',liveDeliveryNames[last.status]||'Aguardando ChatGPT...');
   }
  }catch(e){mark('liveComposeState','Chat temporariamente indisponível: '+e.message)}
