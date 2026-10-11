@@ -68,7 +68,7 @@ func TestToolListSchemaSerialization(t *testing.T) {
 	}
 	result := obj["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 59 {
+	if len(tools) != 69 {
 		t.Fatalf("tool count %d", len(tools))
 	}
 	for _, it := range tools {
