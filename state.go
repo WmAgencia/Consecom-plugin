@@ -39,6 +39,7 @@ type App struct {
 	agents         map[string]*Agent
 	browserControl BrowserControl
 	devJobs DevJobManager
+	devPreviews DevPreviewManager
 	workflows WorkflowManager
 	renders RenderManager
 }
