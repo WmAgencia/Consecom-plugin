@@ -242,7 +242,7 @@ let liveChatSignature='';
 let liveChatBooted=false;
 let liveBenchRunning=false;
 const latencyAcknowledged=new Set();
-const liveDeliveryNames={queued:"Aguardando conexão",claimed:"ChatGPT processando",host_resolved:"Aguardando resposta",host_rejected:"Envio recusado",superseded:"Reenviada",answered:"Respondida"};
+const liveDeliveryNames={queued:"Aguardando conexão",claimed:"Encaminhando ao ChatGPT",host_resolved:"Aguardando resposta",host_rejected:"Envio recusado",superseded:"Reenviada",answered:"Respondida"};
 async function sendConsecomMessage(){
  const input=document.getElementById('liveUserMessage'),btn=document.getElementById('liveSendButton');
  if(liveComposeBusy)return;
@@ -420,16 +420,16 @@ async function runConsecomTenTests(){
    if(!finalReceived){cancelled='A resposta final não chegou em 120s; teste interrompido para evitar 10 turnos concorrentes.';break}
    if(i<10)await delay(3400);
   }
-  const values=results.map(r=>r.ms).sort((a,b)=>a-b);
   const exact=results.filter(r=>r.exact);
+  const values=exact.map(r=>r.ms).sort((a,b)=>a-b);
   if(values.length){
    const sum=values.reduce((a,b)=>a+b,0);
    const med=values.length%2?values[(values.length-1)/2]:(values[values.length/2-1]+values[values.length/2])/2;
    const p90=values[Math.ceil(values.length*.9)-1];
    const above15=values.filter(v=>v>15000).length;
-   output.textContent='Teste real: '+results.length+'/10 medições; '+exact.length+' com despacho exato · média '+round2(sum/values.length)+'s · mediana '+round2(med)+'s · P90 '+round2(p90)+'s · pior '+round2(values[values.length-1])+'s · acima de 15s: '+above15+'.'+(cancelled?' PARCIAL: '+cancelled:' Concluído.')+' A geração do modelo não entra nos tempos.';
+   output.textContent='Teste real: '+results.length+'/10 mensagens, '+values.length+' despachos medidos exatamente · média '+round2(sum/values.length)+'s · mediana '+round2(med)+'s · P90 '+round2(p90)+'s · pior '+round2(values[values.length-1])+'s · acima de 15s: '+above15+'.'+(results.length-values.length?' Outros '+(results.length-values.length)+' são apenas limites superiores por falta de followup_at.':'')+(cancelled?' PARCIAL: '+cancelled:' Concluído.')+' Tempo do modelo excluído somente das medições exatas.';
   }else{
-   output.textContent='Nenhuma medição de despacho concluída. '+(cancelled||'Verifique o Consecom Live.');
+   output.textContent='Foram registrados '+results.length+' eventos, porém sem timestamp exato de despacho. Não é possível calcular média/P90 confiáveis. '+(cancelled||'Verifique a telemetria MCP.');
   }
  }catch(e){
   if(output)output.textContent='Teste 10x interrompido: '+e.message;
