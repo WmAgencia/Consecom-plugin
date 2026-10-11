@@ -184,7 +184,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
 <h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p></div></div>
-<button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div>
+<div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
 <div class="live-chat-stream" id="liveChatStream" role="log" aria-live="polite" aria-relevant="additions">
 <div class="live-chat-empty">Esta é sua conversa com o ChatGPT. Escreva abaixo, mantenha o Consecom Live ativo na conversa do ChatGPT e veja a resposta chegar aqui.</div>
 </div>
@@ -230,6 +230,7 @@ async function api(path,data){let opt={headers:{'X-Local-Key':KEY}};if(data!==un
 let liveComposeBusy=false;
 let liveChatSignature='';
 let liveChatBooted=false;
+const latencyAcknowledged=new Set();
 const liveDeliveryNames={queued:"Aguardando conexão",claimed:"ChatGPT processando",host_resolved:"Aguardando resposta",host_rejected:"Envio recusado",superseded:"Reenviada",answered:"Respondida"};
 async function sendConsecomMessage(){
  const input=document.getElementById('liveUserMessage'),btn=document.getElementById('liveSendButton');
@@ -279,6 +280,17 @@ async function refreshConsecomChat(force=false){
    fragment.append(row);
   }
   box.replaceChildren(fragment);
+  // One authenticated acknowledgement per recently displayed final message.
+  // Capture the browser-render time, not the next 900ms polling deadline.
+  const renderStamp=new Date().toISOString();
+  for(const entry of messages){
+   if(entry.role!=='assistant'||entry.kind!=='final'||latencyAcknowledged.has(entry.id))continue;
+   const age=Date.now()-Date.parse(entry.created_at);
+   if(!Number.isFinite(age)||age<0||age>600000)continue;
+   latencyAcknowledged.add(entry.id);
+   void api('live/displayed',{event_id:entry.event_id,reply_id:entry.id,observed_at:renderStamp})
+    .catch(()=>latencyAcknowledged.delete(entry.id));
+  }
   if(!liveChatBooted||nearBottom||force)box.scrollTop=box.scrollHeight;
   liveChatBooted=true;
   const last=messages[messages.length-1];
@@ -287,6 +299,16 @@ async function refreshConsecomChat(force=false){
    else if(last.role==='user')mark('liveComposeState',liveDeliveryNames[last.status]||'Aguardando ChatGPT...');
   }
  }catch(e){mark('liveComposeState','Chat temporariamente indisponível: '+e.message)}
+}
+async function showConsecomLatency(){
+ try{
+  const data=(await api('live/latency')).result;
+  const latest=[...(data.messages||[])].reverse().find(x=>x.durations&&x.durations.total_to_reply_ms!==undefined);
+  if(!latest){mark('liveComposeState','Ainda não existem respostas concluídas para diagnosticar.');return}
+  const ms=latest.durations;
+  const sec=n=>n===undefined?'—':(n/1000).toFixed(2)+'s';
+  mark('liveComposeState','Latência '+latest.event_id+': fila '+sec(ms.queue_ms)+' · reivindicação→envio '+sec(ms.claim_to_followup_ms)+' · envio→resposta '+sec(ms.followup_to_reply_ms)+' · resposta→painel '+sec(ms.reply_to_display_ms)+' · total '+sec(ms.total_to_reply_ms)+'. Maior etapa: '+latest.bottleneck+'.');
+ }catch(e){toast('Não foi possível consultar a latência: '+e.message,true)}
 }
 async function retryConsecomMessage(id){
  if(!confirm('Reenviar esta mensagem? Ela pode ser recebida duas vezes no ChatGPT.'))return;
