@@ -283,6 +283,42 @@ async function startupSelfTest(){
   const result=await resultResp.json() as any;
   if(result.status!=="answered"||result.answer!=="Teste OK")throw Error("result lookup failed");
   steps.push("bridge-result");
+
+  // Exercise OAuth DCR, PKCE login, token authorization and refresh against live handlers.
+  let selfCid="";
+  try{
+   const verifier=randomBytes(32).toString("base64url");
+   const challenge=createHash("sha256").update(verifier).digest("base64url");
+   const callback="https://chatgpt.com/oauth/callback/consecom-selftest";
+   const reg=await handle(new Request("http://local/oauth/register",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({redirect_uris:[callback],token_endpoint_auth_method:"none"})}));
+   const regBody=await reg.json() as any;
+   if(reg.status!==201||!regBody.client_id)throw Error("oauth-register failed");
+   selfCid=regBody.client_id;steps.push("oauth-dcr");
+   const authUrl=new URL("http://local/oauth/authorize");
+   const params={response_type:"code",client_id:selfCid,redirect_uri:callback,state:"consecom-selftest",code_challenge:challenge,code_challenge_method:"S256",resource,scope:oauthScope};
+   Object.entries(params).forEach(([key,value])=>authUrl.searchParams.set(key,value));
+   const landing=await handle(new Request(authUrl));
+   const html=await landing.text(),fid=/name="flow_id" value="(flow_[^"]+)"/.exec(html)?.[1];
+   if(landing.status!==200||!fid)throw Error("oauth-authorize form failed");
+   const login=await handle(new Request("http://local/oauth/authorize",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({flow_id:fid,password:Bun.env.OAUTH_PAIRING_CODE||""})}));
+   const location=login.headers.get("Location");
+   if(login.status!==302||!location)throw Error("oauth-consent failed");
+   const code=new URL(location).searchParams.get("code");
+   if(!code)throw Error("oauth-code missing");
+   steps.push("oauth-consent");
+   const exchange=await handle(new Request("http://local/oauth/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"authorization_code",client_id:selfCid,redirect_uri:callback,code,code_verifier:verifier,resource})}));
+   const credentials=await exchange.json() as any;
+   if(exchange.status!==200||!credentials.access_token||!credentials.refresh_token)throw Error("oauth-token exchange failed");
+   const list=await handle(new Request("http://local/mcp",{method:"POST",headers:{authorization:"Bearer "+credentials.access_token,"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:77,method:"tools/list"})}));
+   const listRes=await list.json() as any;
+   if(list.status!==200||!listRes.result?.tools?.length)throw Error("oauth-MCP authorization failed");
+   steps.push("oauth-mcp-access");
+   const rotated=await handle(new Request("http://local/oauth/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({grant_type:"refresh_token",client_id:selfCid,refresh_token:credentials.refresh_token,resource})}));
+   const rotatedBody=await rotated.json() as any;
+   if(rotated.status!==200||!rotatedBody.access_token)throw Error("oauth-refresh failed");
+   if(oauthValid(new Request("http://local/mcp",{headers:{authorization:"Bearer "+credentials.access_token}})))throw Error("old OAuth access token not revoked after refresh");
+   steps.push("oauth-refresh-rotation");
+  }finally{if(selfCid){db.query("DELETE FROM oauth_clients WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_tokens WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_flows WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_codes WHERE client_id=?").run(selfCid)}}
   selfTest={status:"passed",steps};
  }catch(err){selfTest={status:"failed",steps,error:String(err)}}
  finally{if(testId)db.query("DELETE FROM events WHERE id=?").run(testId)}
