@@ -142,6 +142,53 @@ const widgetURI="ui://consecom/cloud/live";
 const widgetHTML="<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>:root{color-scheme:light dark}body{font:14px/1.5 system-ui,sans-serif; padding:16px; margin:0; background:#101820;color:#f0f6fa}section{background:#1a2936;border:1px solid #334555;padding:14px;border-radius:14px;margin-bottom:12px}h3{margin:0 0 5px}p{margin:8px 0}.muted{color:#a8bfca;font-size:12px}button{background:#147e6b;border:0;border-radius:9px;padding:9px 12px;color:white;cursor:pointer}#status{padding:10px;background:#102d30;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere}.entry{border-bottom:1px solid #344758;padding:8px 0;overflow-wrap:anywhere}.entry:last-child{border:0}</style></head><body><section><h3>Consecom Cloud Live</h3><p class=\"muted\">Transporte experimental via MCP. Fila persistente no Railway; a recepção automática exige que este componente permaneça ativo no ChatGPT.</p><label><input id=\"auto\" type=\"checkbox\" checked> Encaminhar mensagens automaticamente</label><p id=\"status\" role=\"status\">Iniciando conexão...</p><button id=\"retry\" type=\"button\">Tentar agora</button></section><section><h3>Eventos recentes</h3><div id=\"items\" class=\"muted\">Nenhum evento recebido ainda.</div></section><script>(function(){\"use strict\";var host=window.openai||{};var auto=document.getElementById(\"auto\"),status=document.getElementById(\"status\"),items=document.getElementById(\"items\"),retry=document.getElementById(\"retry\");var active=true,polling=false,errors=0;var seen=new Set();var delay=function(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})};function unpack(x){if(x&&x.structuredContent)return x.structuredContent;if(x&&x.result&&x.result.structuredContent)return x.result.structuredContent;for(var part of ((x&&x.content)||[])){if(part.type===\"text\"){try{return JSON.parse(part.text)}catch(_){}}}return x||{}}function announce(s){status.textContent=s}function persist(){if(typeof host.setWidgetState===\"function\"){try{host.setWidgetState({automatic:auto.checked})}catch(_){}}}if(host.widgetState&&typeof host.widgetState.automatic===\"boolean\")auto.checked=host.widgetState.automatic;auto.addEventListener(\"change\",function(){persist();if(auto.checked){active=true;poll()}});function report(id,flag){if(typeof host.callTool!==\"function\")return;Promise.resolve(host.callTool(\"consecom_live_reportar_host\",{id:id,status:flag})).catch(function(){})}function show(e){if(seen.has(e.id))return;seen.add(e.id);if(items.textContent===\"Nenhum evento recebido ainda.\")items.textContent=\"\";var item=document.createElement(\"div\");item.className=\"entry\";item.textContent=e.id+\" · \"+e.message;items.prepend(item);while(items.children.length>18)items.lastChild.remove()}function dispatch(e){if(!auto.checked)return;if(typeof host.sendFollowUpMessage!==\"function\"){announce(\"Este host não disponibilizou sendFollowUpMessage. Mensagem reservada, aguardando reenvio seguro.\");report(e.id,\"unavailable\");return}var prompt=\"Mensagem externa recebida pelo Consecom Cloud. ID: \"+e.id+\"\\n\\n\"+e.message+\"\\n\\nResponda à mensagem e publique sua resposta usando a ferramenta MCP consecom_chat_responder com id=\"+e.id+\", texto=RESPOSTA e tipo=final. Não alegue ter executado comandos que não executou.\";announce(\"Enviando \"+e.id+\" ao ChatGPT...\");var submitted;try{submitted=host.sendFollowUpMessage({prompt:prompt,scrollToBottom:false})}catch(err){announce(\"Erro ao solicitar turno: \"+String(err));report(e.id,\"host_rejected\");return}report(e.id,\"attempt\");Promise.resolve(submitted).then(function(r){if(r&&r.isError){report(e.id,\"host_rejected\");announce(\"Host recusou \"+e.id);return}report(e.id,\"host_resolved\");announce(\"ChatGPT aceitou a solicitação de \"+e.id+\"; aguardando resposta publicada.\")}).catch(function(err){report(e.id,\"host_rejected\");announce(\"Falha na entrega: \"+String(err).slice(0,150))})}async function loop(){if(polling||!active)return;polling=true;try{while(active){try{host=window.openai||{};if(typeof host.callTool!==\"function\"){announce(\"Ponte MCP indisponível. Tentarei reconectar.\");await delay(1200);continue}if(!auto.checked){announce(\"Recepção automática pausada pelo usuário.\");await delay(1600);continue}if(typeof host.sendFollowUpMessage!==\"function\"){announce(\"Host sem envio de mensagens. Aguardando recurso disponível...\");await delay(1800);continue}var r=unpack(await host.callTool(\"consecom_live_aguardar_e_assumir\",{wait_ms:5000}));if(r&&r.isError)throw Error(\"Ferramenta recusada\");if(!active)break;errors=0;var owned=new Set(Array.isArray(r.claimed_ids)?r.claimed_ids:[]);for(var e of (Array.isArray(r.events)?r.events:[])){show(e);if(owned.has(e.id))dispatch(e)}if(!r.events||!r.events.length)announce(\"Conectado. Aguardando mensagens no Railway...\")}catch(err){errors=Math.min(errors+1,6);announce(\"Falha temporária, reconectando: \"+String(err).slice(0,110));await delay(Math.min(5000,300*Math.pow(2,errors)))}}}finally{polling=false;if(active)void loop()}}window.addEventListener(\"pagehide\",function(){active=false});window.addEventListener(\"pageshow\",function(){active=true;poll()});document.addEventListener(\"visibilitychange\",function(){if(!document.hidden&&active)poll()});retry.addEventListener(\"click\",function(){active=true;poll()});void loop()})();</script></body></html>";
 const json=(v:any,status=200,headers:any={})=>new Response(JSON.stringify(v),{status,headers:{"content-type":"application/json","cache-control":"no-store",...headers}});
 const auth=(r:Request,t:string|undefined)=>!!t&&t.length>=24&&r.headers.get("authorization")==="Bearer "+t;
+
+// Prototype-only private binary artifact transfer. Not multi-tenant: never use this with multiple customers.
+const artifactMaxBytes=8*1024*1024;
+const artifactQuotaBytes=96*1024*1024;
+const artifactMime=new Set(["application/pdf","image/png","image/jpeg","text/plain","application/zip"]);
+db.exec("CREATE TABLE IF NOT EXISTS cloud_artifacts (id TEXT PRIMARY KEY,file_name TEXT NOT NULL,mime TEXT NOT NULL,body BLOB NOT NULL,byte_size INTEGER NOT NULL,sha256 TEXT NOT NULL,created_at TEXT NOT NULL); CREATE INDEX IF NOT EXISTS cloud_artifacts_created_idx ON cloud_artifacts(created_at);");
+const artifactUsage=()=>db.query("SELECT COUNT(*) count,COALESCE(SUM(byte_size),0) used_bytes FROM cloud_artifacts").get() as {count:number,used_bytes:number};
+const safeFileName=(raw:string)=>{
+ const name=raw.replace(/[^a-zA-Z0-9._-]+/g,"_").slice(0,110).replace(/^\.+/,"");
+ return name||"artifact.bin";
+};
+async function artifactHttp(req:Request,url:URL):Promise<Response|null>{
+ const path=url.pathname,method=req.method;
+ if(path!=="/bridge/artifacts"&&!path.startsWith("/bridge/artifacts/"))return null;
+ if(!auth(req,Bun.env.BRIDGE_INGEST_TOKEN))return json({error:"unauthorized"},401);
+ if(path==="/bridge/artifacts"){
+  if(method!=="POST")return json({error:"method_not_allowed"},405);
+  const mime=(req.headers.get("content-type")||"").split(";")[0].trim().toLowerCase();
+  if(!artifactMime.has(mime))return json({error:"unsupported_media_type"},415);
+  const contentLen=Number(req.headers.get("content-length")||0);
+  if(contentLen>artifactMaxBytes)return json({error:"artifact_too_large",max_bytes:artifactMaxBytes},413);
+  let data:Uint8Array;try{data=new Uint8Array(await req.arrayBuffer())}catch{return json({error:"invalid_upload"},400)}
+  if(data.length<1||data.length>artifactMaxBytes)return json({error:"invalid_size",max_bytes:artifactMaxBytes},413);
+  if(mime==="application/pdf"&&Buffer.from(data.subarray(0,5)).toString("ascii")!=="%PDF-")return json({error:"invalid_pdf_header"},422);
+  const usage=artifactUsage();
+  if(usage.used_bytes+data.length>artifactQuotaBytes)return json({error:"storage_quota_reached",quota_bytes:artifactQuotaBytes},507);
+  const fileName=safeFileName(req.headers.get("x-file-name")||("artifact."+({["application/pdf"]:"pdf",["image/png"]:"png",["image/jpeg"]:"jpg",["text/plain"]:"txt",["application/zip"]:"zip"} as any)[mime]));
+  const artifactId="art_"+randomBytes(16).toString("hex");
+  const hash=createHash("sha256").update(data).digest("hex");
+  db.query("INSERT INTO cloud_artifacts (id,file_name,mime,body,byte_size,sha256,created_at) VALUES(?,?,?,?,?,?,?)").run(artifactId,fileName,mime,Buffer.from(data),data.length,hash,ts());
+  return json({id:artifactId,file_name:fileName,mime,bytes:data.length,sha256:hash,download_path:"/bridge/artifacts/"+artifactId,requires_authorization:true,storage:"private"},201);
+ }
+ const suffix=path.slice("/bridge/artifacts/".length);
+ const isMeta=suffix.endsWith("/meta"),id=isMeta?suffix.slice(0,-5):suffix;
+ if(!/^art_[a-f0-9]{32}$/.test(id))return json({error:"not_found"},404);
+ if(method==="DELETE"&&!isMeta){
+  const gone=db.query("DELETE FROM cloud_artifacts WHERE id=?").run(id);
+  return gone.changes===1?json({id,deleted:true}):json({error:"not_found"},404);
+ }
+ if(method!=="GET")return json({error:"method_not_allowed"},405);
+ const row=db.query("SELECT * FROM cloud_artifacts WHERE id=?").get(id) as any;
+ if(!row)return json({error:"not_found"},404);
+ const meta={id:row.id,file_name:row.file_name,mime:row.mime,bytes:row.byte_size,sha256:row.sha256,created_at:row.created_at};
+ if(isMeta)return json(meta);
+ return new Response(Buffer.from(row.body),{status:200,headers:{"content-type":row.mime,"content-disposition":'attachment; filename="'+safeFileName(row.file_name)+'"',"content-length":String(row.byte_size),"cache-control":"private, no-store","x-content-type-options":"nosniff","x-artifact-sha256":row.sha256}});
+}
+
 const schema=(p:any={},req:string[]=[])=>({type:"object",properties:p,required:req});
 const tools=[
  {name:"consecom_live_abrir",description:"Abre Consecom Cloud Live nesta conversa. Requer widget ativo e consentimento do usuário. Opcionalmente dispara teste HTTPS.",inputSchema:schema({testar_recepcao:{type:"boolean"},mensagem_teste:{type:"string",maxLength:1500}}),_meta:{ui:{resourceUri:widgetURI},"openai/outputTemplate":widgetURI}},
@@ -175,6 +222,7 @@ async function getBatch(ms:number){
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
  const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
+ const fileResponse=await artifactHttp(req,url);if(fileResponse)return fileResponse;
  if(method==="GET"&&url.pathname==="/health"){try{db.query("SELECT 1").get();return json({status:"ok",service:"consecom-cloud-mcp",version:"0.2.0",storage:"sqlite-volume",boots_from_persistent_disk:bootCount,self_test:selfTest})}catch{return json({status:"database_unavailable"},503)}}
  if(url.pathname==="/mcp"){
   if(!oauthValid(req))return unauthorized();
@@ -297,6 +345,35 @@ async function startupSelfTest(){
   const result=await resultResp.json() as any;
   if(result.status!=="answered"||result.answer!=="Teste OK")throw Error("result lookup failed");
   steps.push("bridge-result");
+
+  // Private artifact storage round-trip; no public download without the bridge secret.
+  const pdfBytes=Buffer.from("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n","utf8");
+  const downloadAuth={authorization:"Bearer "+bridge};
+  const noAuth=await handle(new Request("http://local/bridge/artifacts",{method:"POST",headers:{"content-type":"application/pdf","x-file-name":"banana.pdf"},body:pdfBytes}));
+  if(noAuth.status!==401)throw Error("Artifact POST should require authentication");
+  steps.push("artifacts-auth-401");
+  const upload=await handle(new Request("http://local/bridge/artifacts",{method:"POST",headers:{...downloadAuth,"content-type":"application/pdf","x-file-name":"banana.pdf"},body:pdfBytes}));
+  const info=await upload.json() as any;
+  if(upload.status!==201||!info.id||info.bytes!==pdfBytes.length)throw Error("Artifact upload failed");
+  const artifactId=info.id;steps.push("artifacts-upload");
+  try{
+   const metadata=await handle(new Request("http://local/bridge/artifacts/"+artifactId+"/meta",{headers:downloadAuth}));
+   const met=await metadata.json() as any;
+   if(metadata.status!==200||met.sha256!==createHash("sha256").update(pdfBytes).digest("hex"))throw Error("Artifact metadata sha mismatch");
+   steps.push("artifacts-metadata");
+   const download=await handle(new Request("http://local/bridge/artifacts/"+artifactId,{headers:downloadAuth}));
+   const roundtrip=Buffer.from(await download.arrayBuffer());
+   if(download.status!==200||!roundtrip.equals(pdfBytes))throw Error("Artifact byte roundtrip failed");
+   steps.push("artifacts-download-integrity");
+   const unauthorizedGet=await handle(new Request("http://local/bridge/artifacts/"+artifactId));
+   if(unauthorizedGet.status!==401)throw Error("Artifact GET must reject anonymous clients");
+   steps.push("artifacts-private-download");
+  }finally{
+   const del=await handle(new Request("http://local/bridge/artifacts/"+artifactId,{method:"DELETE",headers:downloadAuth}));
+   if(del.status!==200)throw Error("Artifact cleanup failed");
+  }
+  steps.push("artifacts-delete");
+
 
   // Exercise OAuth DCR, PKCE login, token authorization and refresh against live handlers.
   let selfCid="";
