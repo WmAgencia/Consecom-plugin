@@ -311,16 +311,8 @@ func install(remotelyApproved bool) error {
 	if e = os.WriteFile(iconPath, iconData, 0600); e != nil {
 		return e
 	}
-	// Download verified official client on first installation, not from an
-	// arbitrary mirror. A blocked network does not damage the working MCP.
-	if err := downloadOfficialTunnelClient(dir); err != nil {
-		_ = os.WriteFile(filepath.Join(dir, "download-tunnel-error.txt"), []byte(err.Error()), 0600)
-		if !remotelyApproved {
-			msg("Consecom Plugin - Aviso", "O Consecom foi atualizado, mas o cliente oficial de tunel nao foi baixado. Verifique sua internet e execute o instalador novamente.\n\n"+err.Error(), 0x30)
-		}
-	} else {
-		_ = os.Remove(filepath.Join(dir, "download-tunnel-error.txt"))
-	}
+	// Railway-only release: no tunnel-client download or installation.
+	// Older tunnel executable is stopped above and left untouched for rollback safety.
 
 	if e = shortcuts(exe, iconPath); e != nil {
 		return e
@@ -354,5 +346,5 @@ func main() {
 	if *remoteApproved {
 		return
 	}
-	msg("Consecom Plugin v"+installerExpectedVersion, "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: navegador exclusivo Consecom (Chrome ou Edge), controle de permissoes compacto e indexacao de metadados Markdown do Obsidian, sem abrir o Chrome pessoal.", 0x40)
+	msg("Consecom Plugin v"+installerExpectedVersion, "Atualizacao concluida!\n\nO servidor local roda em segundo plano e conecta ao Railway por HTTPS, sem tunel.\n\nAbra Conectar ao ChatGPT no painel e informe o token privado CONSECOM_LOCAL_WORKER_TOKEN da conta Railway.\n\nA conexão do ChatGPT usa o plugin Consecom em https://consecom-mcp-relay-production.up.railway.app/mcp.\n\nSuas pastas, permissoes e configuracoes locais foram preservadas.", 0x40)
 }
