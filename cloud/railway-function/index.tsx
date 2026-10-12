@@ -330,6 +330,98 @@ const gatewayModelInfos=[
  {id:gwModel,type:"model",display_name:"Consecom – diagnóstico legado",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
  {id:gatewayBridgeModel,type:"model",display_name:"Consecom – ponte legado",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"}
 ];
+
+// Registry of REAL upstream models. Only authenticated upstreams explicitly configured
+// in Railway may be queried or routed. The ChatGPT subscription is NOT an upstream API.
+type GatewayProvider={name:string,base_url:string,key_env:string,auth_scheme:"x-api-key"|"bearer"};
+type GatewayRoute={provider:GatewayProvider,upstreamId:string};
+const providerConfig=():GatewayProvider[]=>{
+ let items:any[]=[];
+ try{const parsed=JSON.parse(Bun.env.CONSECOM_UPSTREAM_PROVIDERS_JSON||"[]");if(Array.isArray(parsed))items=parsed.slice(0,8)}catch{return []}
+ return items.filter(v=>{
+  if(!v||typeof v!=="object"||typeof v.name!=="string"||typeof v.base_url!=="string"||typeof v.key_env!=="string")return false;
+  if(v.name.length>70||!/^CONSECOM_UPSTREAM_[A-Z0-9_]+$/.test(v.key_env))return false;
+  if(v.auth_scheme!=="x-api-key"&&v.auth_scheme!=="bearer")return false;
+  try{const u=new URL(v.base_url);return u.protocol==="https:"&&!u.username&&!u.password&&!u.hash&&!u.search&&u.hostname.length>4&&u.hostname!=="localhost"}catch{return false}
+ }).map(v=>({name:v.name,base_url:v.base_url.replace(/\/+$/,""),key_env:v.key_env,auth_scheme:v.auth_scheme}));
+};
+const upstreamHeaders=(def:GatewayProvider)=>{
+ const secret=Bun.env[def.key_env]||"";
+ if(secret.length<12)return null;
+ return {header:def.auth_scheme==="bearer"?"authorization":"x-api-key",value:def.auth_scheme==="bearer"?"Bearer "+secret:secret};
+};
+type GatewayRegistry={until:number,models:any[],routes:Map<string,GatewayRoute>,providers:{name:string,status:string,model_count:number}[]};
+let registryCache:GatewayRegistry|null=null;
+const normalizeUpstreamModel=(entry:any)=>{
+ if(!entry||typeof entry!=="object"||typeof entry.id!=="string"||!/^[-A-Za-z0-9_./:]{2,150}$/.test(entry.id))return null;
+ return {type:"model",id:entry.id,display_name:typeof entry.display_name==="string"?entry.display_name.slice(0,120):entry.id,
+  created_at:typeof entry.created_at==="string"?entry.created_at:"1970-01-01T00:00:00Z",
+  capabilities:entry.capabilities&&typeof entry.capabilities==="object"?entry.capabilities:null,
+  max_input_tokens:Number.isSafeInteger(entry.max_input_tokens)&&entry.max_input_tokens>0?entry.max_input_tokens:null,
+  max_tokens:Number.isSafeInteger(entry.max_tokens)&&entry.max_tokens>0?entry.max_tokens:null,
+  lifecycle:["active","deprecated","retired"].includes(entry.lifecycle)?entry.lifecycle:"active",
+  deprecated_at:typeof entry.deprecated_at==="string"?entry.deprecated_at:null};
+};
+async function availableModelRegistry(force=false):Promise<GatewayRegistry>{
+ if(!force&&registryCache&&Date.now()<registryCache.until)return registryCache;
+ const models:any[]=[...gatewayModelInfos],routes=new Map<string,GatewayRoute>(),providers:GatewayRegistry["providers"]=[];
+ const used=new Set<string>(models.map(x=>x.id));
+ for(const def of providerConfig()){
+  const cred=upstreamHeaders(def);
+  if(!cred){providers.push({name:def.name,status:"missing_credential",model_count:0});continue}
+  let after="",found=0,ok=false;
+  try{
+   for(let page=0;page<10;page++){
+    const endpoint=new URL(def.base_url+"/v1/models");
+    endpoint.searchParams.set("limit","100");
+    if(after)endpoint.searchParams.set("after_id",after);
+    const response=await fetch(endpoint.toString(),{headers:{[cred.header]:cred.value,"anthropic-version":"2023-06-01","accept":"application/json"},redirect:"error",signal:AbortSignal.timeout(8000)});
+    if(!response.ok)throw Error("HTTP "+response.status);
+    const body=await response.json() as any;
+    if(!Array.isArray(body.data))throw Error("bad models response");
+    for(const raw of body.data){
+     const entry=normalizeUpstreamModel(raw);
+     if(!entry||used.has(entry.id)||entry.lifecycle==="retired")continue;
+     used.add(entry.id);models.push(entry);routes.set(entry.id,{provider:def,upstreamId:entry.id});found++;
+    }
+    ok=true;
+    if(!body.has_more||!body.last_id||body.last_id===after)break;
+    after=body.last_id;
+   }
+   providers.push({name:def.name,status:ok?"reachable":"unknown",model_count:found});
+  }catch(err){providers.push({name:def.name,status:"discovery_error:"+String(err).slice(0,65),model_count:found})}
+ }
+ registryCache={until:Date.now()+90000,models,routes,providers};
+ return registryCache;
+}
+async function upstreamMessage(req:Request,body:any):Promise<Response|null>{
+ if(!body||typeof body.model!=="string")return null;
+ const registry=await availableModelRegistry();
+ const route=registry.routes.get(body.model);if(!route)return null;
+ const credential=upstreamHeaders(route.provider);
+ if(!credential)return anthropicError("authentication_error","Upstream credential missing",503);
+ const headers:Record<string,string>={"content-type":"application/json","accept":"application/json, text/event-stream","anthropic-version":req.headers.get("anthropic-version")||"2023-06-01",[credential.header]:credential.value};
+ const beta=req.headers.get("anthropic-beta");if(beta)headers["anthropic-beta"]=beta;
+ try{
+  const upstream=await fetch(route.provider.base_url+"/v1/messages",{method:"POST",headers,body:JSON.stringify({...body,model:route.upstreamId}),redirect:"error",signal:AbortSignal.timeout(180000)});
+  const contentType=upstream.headers.get("content-type")||"application/json";
+  // Stream bytes unchanged, including tool_use/tool_result.
+  return new Response(upstream.body,{status:upstream.status,headers:{"content-type":contentType,"cache-control":"no-store","x-consecom-model-route":route.provider.name}});
+ }catch{return anthropicError("api_error","Configured inference provider is unavailable.",502)}
+}
+const paginateModels=(items:any[],url:URL)=>{
+ let list=items.filter(x=>x.lifecycle!=="retired");
+ const lifecycle=url.searchParams.getAll("lifecycle");
+ if(lifecycle.length)list=list.filter(x=>lifecycle.includes(x.lifecycle));
+ const after=url.searchParams.get("after_id"),before=url.searchParams.get("before_id");
+ if(after){const i=list.findIndex(x=>x.id===after);if(i<0)return null;list=list.slice(i+1)}
+ if(before){const i=list.findIndex(x=>x.id===before);if(i<0)return null;list=list.slice(0,i)}
+ const requested=Number(url.searchParams.get("limit")||20);
+ if(!Number.isInteger(requested)||requested<1||requested>1000)return null;
+ const page=list.slice(0,requested);
+ return {data:page,has_more:list.length>page.length,first_id:page[0]?.id||null,last_id:page.at(-1)?.id||null};
+};
+
 const gatewayCORS=(response:Response)=>{
  const headers=new Headers(response.headers);
  headers.set("Access-Control-Allow-Origin","*");
@@ -339,7 +431,7 @@ const gatewayCORS=(response:Response)=>{
  headers.set("Access-Control-Max-Age","600");
  return new Response(response.body,{status:response.status,headers});
 };
-const gatewayDiagnostic=(req:Request)=>json({
+const gatewayDiagnostic=async(req:Request)=>{const registry=await availableModelRegistry();return json({
  type:"gateway_diagnostic",status:"reachable_and_authenticated",auth_scheme:"x-api-key",
  provider:"Consecom Cloud experimental relay",inference_available:false,
  message:"O gateway autentica requisicoes e transporta texto pelo MCP. Nao fornece uma LLM nativa nem tool_use/tool_result para Claude Desktop.",
@@ -347,8 +439,11 @@ const gatewayDiagnostic=(req:Request)=>json({
  discovery_compatible_aliases:[gatewayDesktopConnectionAlias,gatewayDesktopBridgeAlias],
  test_model:gwModel,bridge_model:gatewayBridgeModel,
  models_endpoint:"/v1/models",messages_endpoint:"/v1/messages",
- caveat:"O widget ChatGPT precisa estar ativo; requisições Claude Desktop com modelos reais ou ferramentas não são suportadas."
-},200,{"cache-control":"private, no-store"});
+ caveat:"A ponte ChatGPT nao substitui uma API de inferencia. Modelos de provedores autenticamente conectados sao repassados a montante.",
+ discovered_upstream_models:registry.routes.size,providers:registry.providers,
+ configured_upstream_count:providerConfig().length,
+ model_ids:registry.models.map((m:any)=>m.id)
+},200,{"cache-control":"private, no-store"});};
 
 async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
  const method=req.method,path=url.pathname;
@@ -357,16 +452,16 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
  if(!gatewayCredential(req))return anthropicError("authentication_error","Consecom Cloud gateway: chave ausente ou inválida.",401);
  if(path==="/gateway/diagnostics"){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
-  return gatewayDiagnostic(req);
+  return await gatewayDiagnostic(req);
  }
  if(path==="/v1/models"){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
-  return json({data:gatewayModelInfos,has_more:false,first_id:gatewayModelInfos[0].id,last_id:gatewayModelInfos.at(-1)?.id||null});
+  const registry=await availableModelRegistry();const page=paginateModels(registry.models,url);return page?json(page):anthropicError("invalid_request_error","Invalid model page cursor or limit",400);
  }
  if(path.startsWith("/v1/models/")){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
   const mid=decodeURIComponent(path.slice("/v1/models/".length));
-  const model=gatewayModelInfos.find(m=>m.id===mid);
+  const registry=await availableModelRegistry();const model=registry.models.find((m:any)=>m.id===mid);
   return model?json(model):anthropicError("not_found_error","Modelo nao disponivel neste gateway de teste. Nenhuma inferencia real configurada.",404);
  }
  if(method!=="POST")return anthropicError("invalid_request_error","Method not allowed",405);
@@ -378,6 +473,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
   // Count endpoint must not invent model token usage. Explicitly unsupported.
   return anthropicError("invalid_request_error","Token counting requires a genuine inference model; this is connectivity-only.",501);
  }
+ const upstream=await upstreamMessage(req,body);if(upstream)return upstream;
  if(body.model===gatewayBridgeModel||body.model===gatewayDesktopBridgeAlias)return gatewayBridgeHandler(body);
  if(body.model!==gwModel&&body.model!==gatewayDesktopConnectionAlias)return anthropicError("not_found_error","No inference model is configured; available routes are diagnostic only.",404);
  if(!Array.isArray(body.messages))return anthropicError("invalid_request_error","messages must be an array",400);
@@ -585,6 +681,13 @@ async function startupSelfTest(){
   const diag=await diagResp.json() as any;
   if(diagResp.status!==200||diag.inference_available!==false||diag.auth_scheme!=="x-api-key")throw Error("Gateway diagnostics must disclose that inference is unavailable");
   steps.push("gateway-no-inference-diagnostics");
+  const registry=await availableModelRegistry(true);
+  if(registry.models.length<4||registry.routes.size!==0||registry.providers.length!==0)throw Error("Default registry must only include diagnostic models when no upstream is configured");
+  const norm=normalizeUpstreamModel({id:"test/known-model",display_name:"Test",created_at:"2026-01-01T00:00:00Z",max_input_tokens:200000,max_tokens:64000});
+  if(!norm||norm.max_input_tokens!==200000||norm.type!=="model")throw Error("Model metadata normalization failed");
+  const page=paginateModels(registry.models,new URL("http://local/v1/models?limit=2"));
+  if(!page||page.data.length!==2||page.has_more!==true)throw Error("Model list pagination failed");
+  steps.push("gateway-dynamic-catalog-normalization");
 
   const accepted=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify(testReq)}));
   const acceptedBody=await accepted.json() as any;
