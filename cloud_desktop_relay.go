@@ -112,7 +112,12 @@ func (a *App) desktopSyncChat(client *http.Client,token string){
    Answer string `json:"answer"`
   }
   err:=cloudWorkerCall(client,"/desktop/worker/reply",token,map[string]any{"worker_id":desktopWorkerName,"external_id":external},&reply)
-  if err!=nil{desktopUpdate(false,err,"","");return}
+  if err!=nil{
+   // Mensagem marcada como claimed pelo túnel antigo não deve ser reenviada automaticamente.
+   // O Railway não conhece esse ID antigo; deixe para recuperação manual e siga a fila.
+   if strings.Contains(err.Error(),"HTTP 404"){continue}
+   desktopUpdate(false,err,"","");return
+  }
   if reply.State=="answered"&&strings.TrimSpace(reply.Answer)!=""{
    _,err=a.live.publishChatReply(ev.ID,reply.Answer,"final","railway-"+ev.ID)
    if err!=nil && !strings.Contains(err.Error(),"resposta final ja publicada") {desktopUpdate(false,err,"","");return}
