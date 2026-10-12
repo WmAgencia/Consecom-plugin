@@ -23,6 +23,8 @@ import (
 var assets embed.FS
 
 const createNoWindow = 0x08000000
+// MUST equal consecomVersion in ../update.go; tested by version_sync_test.go.
+const installerExpectedVersion = "4.14.9"
 
 func msg(title, body string, style uintptr) int {
 	dll := syscall.NewLazyDLL("user32.dll")
@@ -213,7 +215,7 @@ func verifyServer() error {
 			}
 			decodeErr := json.NewDecoder(res.Body).Decode(&state)
 			res.Body.Close()
-			if decodeErr == nil && state.Version == "4.14.7" && state.Service == "consecom-mcp" {
+			if decodeErr == nil && state.Version == installerExpectedVersion && state.Service == "consecom-mcp" {
 				return nil
 			}
 			lastVersion = state.Version
@@ -352,5 +354,5 @@ func main() {
 	if *remoteApproved {
 		return
 	}
-	msg("Consecom Plugin v4.14.7", "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: navegador exclusivo Consecom (Chrome ou Edge), controle de permissoes compacto e indexacao de metadados Markdown do Obsidian, sem abrir o Chrome pessoal.", 0x40)
+	msg("Consecom Plugin v"+installerExpectedVersion, "Atualizacao concluida!\n\nO servidor roda em SEGUNDO PLANO, sem abrir CMD ou PowerShell.\nO painel foi aberto no navegador.\nO MCP vai iniciar automaticamente quando voce entrar no Windows.\n\nPara desativar a inicializacao automatica, pressione Win+R e abra shell:startup; apague o atalho 'Consecom Plugin (Segundo Plano)'.\n\nO cliente oficial do tunel sera instalado automaticamente com internet.\nAbra Conectar ao ChatGPT no painel e informe o ID do tunel e a chave de execucao.\n\nSuas pastas e permissoes existentes foram preservadas.\n\nNovo: navegador exclusivo Consecom (Chrome ou Edge), controle de permissoes compacto e indexacao de metadados Markdown do Obsidian, sem abrir o Chrome pessoal.", 0x40)
 }
