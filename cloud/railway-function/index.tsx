@@ -323,6 +323,6 @@ async function startupSelfTest(){
  }catch(err){selfTest={status:"failed",steps,error:String(err)}}
  finally{if(testId)db.query("DELETE FROM events WHERE id=?").run(testId)}
 }
-void startupSelfTest();
+void startupSelfTest().then(()=>console.info("consecom-cloud-selftest",JSON.stringify(selfTest))).catch(err=>console.error("consecom-cloud-selftest-error",String(err)));
 
 export default {port:Number(Bun.env.PORT||8080),async fetch(req:Request){try{return await handle(req)}catch(e){console.error("cloud MCP request error:",e);return json({error:"internal_error"},500)}}};
