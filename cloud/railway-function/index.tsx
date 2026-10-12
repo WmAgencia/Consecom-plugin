@@ -306,6 +306,9 @@ async function startupSelfTest(){
    const landing=await handle(new Request(authUrl));
    const html=await landing.text(),fid=/name="flow_id" value="(flow_[^"]+)"/.exec(html)?.[1];
    if(landing.status!==200||!fid)throw Error("oauth-authorize form failed");
+   const csp=landing.headers.get("content-security-policy")||"";
+   if(!csp.includes("form-action 'self' https://chatgpt.com https://chat.openai.com"))throw Error("OAuth callback CSP blocked");
+   steps.push("oauth-chatgpt-csp-callback");
    const login=await handle(new Request("http://local/oauth/authorize",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({flow_id:fid,password:Bun.env.OAUTH_PAIRING_CODE||""})}));
    const location=login.headers.get("Location");
    if(login.status!==303||!location)throw Error("oauth-consent failed");
