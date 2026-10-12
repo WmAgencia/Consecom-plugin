@@ -200,7 +200,7 @@ const uiHTML = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><m
 .live-chat-info{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:9px;color:#8aa9ba;font-size:11px}
 .live-chat-status{white-space:pre-wrap;max-width:100%}
 @media(max-width:680px){.live-chat-stream{padding:13px;max-height:400px}.live-chat-row{max-width:92%}.live-chat-editor{align-items:stretch}.live-chat-editor textarea{width:100%}}
-</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><a class="nav" href="/cloud-inference" style="text-decoration:none"><span class="symbol">☁</span> Consecom Cloud</a><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.14.9 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
+</style></head><body><div class="app"><aside class="side"><div class="logo"><img src="/logo.png" alt="Símbolo Consecom"><div>Consecom <span class="light">Plugin</span></div></div><small>Seu computador conectado ao ChatGPT</small><button class="nav active" id="navPanel" onclick="page('panel')"><span class="symbol">⌂</span> Painel</button><button class="nav" id="navLab" onclick="page('lab')"><span class="symbol">◈</span> Laboratório de Agentes</button><button class="nav" id="navContext" onclick="page('context')"><span class="symbol">◎</span> Contexto</button><div class="sideupdate"><button class="primary update-button" id="sideUpdateBtn" onclick="updateNow()">↻ Atualizar</button><div class="sideupdate-detail" id="updateSummary">Fonte oficial • GitHub</div></div><div class="sidebottom"><div><span class="dot"></span>Servidor MCP <b class="light">Em execução</b></div><div style="margin-top:9px" id="sideConnection">Aguardando conexão do ChatGPT</div></div><div class="sidefooter">Versão 4.15.0 • Servidor local<br>127.0.0.1:8765</div></aside><main class="main">
 <section id="panelPage"><header class="top"><div><h1>Central de Controle do Computador</h1><div class="sub">Controle local do Windows conectado ao ChatGPT, com permissões administradas por você.</div></div><div class="top-actions"><div class="chip"><span class="dot"></span><span id="chatStatus">Aguardando ChatGPT</span></div><button class="primary" onclick="openModal('connection')">↗ Conectar ao ChatGPT</button></div></header><section class="consecom-onboarding" id="consecomOnboarding" aria-label="Ativar o Consecom nesta conversa">
 <div class="consecom-onboarding-head"><div>
 <strong>Ative o Consecom em uma conversa do ChatGPT</strong>
@@ -223,7 +223,7 @@ Ao concluir, confirme somente o que conseguiu verificar. O componente depende de
 </section>
 <div class="live-compose" id="liveCompose" aria-label="Chat com ChatGPT">
 <div class="live-chat-head"><div class="live-chat-identity"><span class="live-chat-avatar">✦</span><div>
-<h2>Chat com ChatGPT</h2><p>Conversa bidirecional via Consecom MCP · uma conexão</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Conferindo se o Consecom Live está ativo...</p></div></div>
+<h2>Chat com ChatGPT</h2><p>Conversa via servidor Railway · conexão HTTPS</p><p id="liveBridgeConnection" aria-live="polite" style="margin:4px 0 0;font-size:11px;color:#c9a46f">Verificando conexão com Railway...</p></div></div>
 <div style="display:flex;gap:6px;flex-wrap:wrap"><button onclick="showConsecomLatency()" title="Diagnosticar os tempos por etapa, sem ler conteúdos">◷ Latência</button><button onclick="refreshConsecomChat(true)" title="Buscar novas mensagens">↻ Atualizar</button></div></div>
 <div class="live-chat-stream" id="liveChatStream" role="log" aria-live="polite" aria-relevant="additions">
 <div class="live-chat-empty">Esta é sua conversa com o ChatGPT. Escreva abaixo, mantenha o Consecom Live ativo na conversa do ChatGPT e veja a resposta chegar aqui.</div>
@@ -300,7 +300,7 @@ async function sendConsecomMessage(){
  const message=input.value.trim();
  if(!message){toast('Escreva uma mensagem antes de enviar.',true);input.focus();return}
  if(new TextEncoder().encode(message).length>2000){toast('Mensagem acima de 2.000 bytes.',true);return}
- liveComposeBusy=true;btn.disabled=true;mark('liveComposeState','Enviando pelo MCP Consecom...');
+ liveComposeBusy=true;btn.disabled=true;mark('liveComposeState','Enviando ao Consecom pelo Railway...');
  try{
   const result=(await api('live/send',{message})).result;
   input.value='';
@@ -318,16 +318,16 @@ async function refreshConsecomChat(force=false){
   const bridge=response.connection||{status:'disconnected',automatic_ready:false};
    const bridgeLabel=document.getElementById('liveBridgeConnection');
    if(bridgeLabel){
-    const names={ready:'● Live detectado · recepção automática ativa',passive:'◐ Live detectado · envio automático não confirmado',disconnected:'○ Live não detectado · abra ou reabra o componente no ChatGPT'};
-    bridgeLabel.textContent=names[bridge.status]||names.disconnected;
-    bridgeLabel.style.color=bridge.status==='ready'?'#7cddba':'#e4ae73';
+    const connected=Boolean(state.desktop?.connected);
+    bridgeLabel.textContent=connected?'● Consecom conectado ao Railway (widget ChatGPT depende de estar ativo)':'○ Railway desconectado · configure em Conectar ao ChatGPT';
+    bridgeLabel.style.color=connected?'#7cddba':'#e4ae73';
    }
    const lastPending=[...messages].reverse().find(m=>m.role==='user'&&m.status==='queued');
    let queueWarning='';
-   if(lastPending&&!bridge.automatic_ready){
+   if(lastPending&&!state.desktop?.connected){
     const age=Date.now()-Date.parse(lastPending.created_at);
     if(Number.isFinite(age)&&age>15000){
-     queueWarning='A mensagem está na fila há '+Math.round(age/1000)+'s. Reabra o Consecom Live no ChatGPT.';
+     queueWarning='Mensagem aguardando Railway há '+Math.round(age/1000)+'s. Verifique a conexão e o componente Consecom no ChatGPT.';
     }
    }
    const staleClaim=messages.find(m=>m.role==='user'&&m.status==='claimed'&&!m.dispatched_at&&m.claimed_at&&Date.now()-Date.parse(m.claimed_at)>=120000);
@@ -452,30 +452,32 @@ function updateView(){document.getElementById('labWorld').style.transform='trans
 function zoomBy(delta){transform.z=Math.min(2.25,Math.max(.45,transform.z+delta));updateView()}
 function resetView(){transform={x:0,y:0,z:1};updateView()}
 const labCanvas=document.getElementById('labCanvas');labCanvas.addEventListener('wheel',e=>{e.preventDefault();zoomBy(e.deltaY<0?.1:-.1)},{passive:false});labCanvas.addEventListener('pointerdown',e=>{if(e.target.closest('.agent'))return;dragging={canvas:true,x:e.clientX,y:e.clientY,tx:transform.x,ty:transform.y}});window.addEventListener('pointermove',e=>{if(!dragging)return;if(dragging.canvas){transform.x=dragging.tx+e.clientX-dragging.x;transform.y=dragging.ty+e.clientY-dragging.y;updateView()}else{agentViews[dragging.id]={x:dragging.oldX+(e.clientX-dragging.sx)/transform.z,y:dragging.oldY+(e.clientY-dragging.sy)/transform.z};let target=document.querySelector('#labWorld [data-id="'+dragging.id+'"]');if(target){target.style.left=agentViews[dragging.id].x+'px';target.style.top=agentViews[dragging.id].y+'px'}}});window.addEventListener('pointerup',()=>dragging=null);
-async function refresh(){if(fetching)return;fetching=true;try{let s=await api('status'),m=s.metrics||{};mark('ramUsed',gb(m.used_ram_bytes));mark('ramFree',gb(m.available_ram_bytes));mark('ramTotal','de '+gb(m.total_ram_bytes)+' físicos');mark('cpu',String(m.cpu_percent??'—')+'%');let total=m.total_ram_bytes||1;document.getElementById('ramUsedBar').style.width=percent(m.used_ram_bytes/total*100);document.getElementById('ramFreeBar').style.width=percent(m.available_ram_bytes/total*100);document.getElementById('cpuBar').style.width=percent(m.cpu_percent);let diskName=state.disks[selectedDisk]?.label;state.disks=s.disks||[];if(diskName){let i=state.disks.findIndex(d=>d.label===diskName);if(i>=0)selectedDisk=i}if(selectedDisk>=state.disks.length)selectedDisk=0;showDisk();state.roots=s.roots||[];state.mode=s.system?.mode||'always';state.agents=s.agents||[];state.tunnel=s.tunnel||{};state.updates=s.updates||{};if(!document.getElementById('sideUpdateBtn').disabled)mark('updateSummary','Repositório oficial • '+(state.updates.version||'—'));let bp=s.browser?.default||{};mark('browserSummary',bp.browser?'Sessão exclusiva • '+bp.browser.toUpperCase()+' • pronta sob demanda':'Aguardando navegador instalado');showMode();renderAgents();renderPending(s.pending||[]);let connected=s.system?.mcp_recent===true;mark('chatStatus',connected?'MCP usado recentemente':state.tunnel.status==='pronto'?'Túnel pronto':state.tunnel.status==='conectando'?'Conectando túnel...':state.tunnel.status==='iniciando'?'Iniciando túnel...':'Aguardando ChatGPT');mark('sideConnection',connected?'MCP respondeu a uma chamada recente':'Sem atividade MCP recente');let started=Date.parse(s.system?.started_at||'');mark('uptime',Number.isFinite(started)?'Ativo há '+Math.floor((Date.now()-started)/60000)+' min':'Servidor ativo');}catch(e){mark('chatStatus','Servidor indisponível');toast('Falha: '+e.message,true)}finally{fetching=false}}
+async function refresh(){if(fetching)return;fetching=true;try{let s=await api('status'),m=s.metrics||{};mark('ramUsed',gb(m.used_ram_bytes));mark('ramFree',gb(m.available_ram_bytes));mark('ramTotal','de '+gb(m.total_ram_bytes)+' físicos');mark('cpu',String(m.cpu_percent??'—')+'%');let total=m.total_ram_bytes||1;document.getElementById('ramUsedBar').style.width=percent(m.used_ram_bytes/total*100);document.getElementById('ramFreeBar').style.width=percent(m.available_ram_bytes/total*100);document.getElementById('cpuBar').style.width=percent(m.cpu_percent);let diskName=state.disks[selectedDisk]?.label;state.disks=s.disks||[];if(diskName){let i=state.disks.findIndex(d=>d.label===diskName);if(i>=0)selectedDisk=i}if(selectedDisk>=state.disks.length)selectedDisk=0;showDisk();state.roots=s.roots||[];state.mode=s.system?.mode||'always';state.agents=s.agents||[];state.desktop=s.desktop||{};state.updates=s.updates||{};if(!document.getElementById('sideUpdateBtn').disabled)mark('updateSummary','Repositório oficial • '+(state.updates.version||'—'));let bp=s.browser?.default||{};mark('browserSummary',bp.browser?'Sessão exclusiva • '+bp.browser.toUpperCase()+' • pronta sob demanda':'Aguardando navegador instalado');showMode();renderAgents();renderPending(s.pending||[]);let connected=s.system?.mcp_recent===true;mark('chatStatus',state.desktop.connected?'Railway conectado':state.desktop.enabled?'Aguardando Railway':'Conectar ao Railway');mark('sideConnection',state.desktop.connected?'Relay HTTPS ativo · sem túnel':'Servidor local pronto · Railway não conectado');let started=Date.parse(s.system?.started_at||'');mark('uptime',Number.isFinite(started)?'Ativo há '+Math.floor((Date.now()-started)/60000)+' min':'Servidor ativo');}catch(e){mark('chatStatus','Servidor indisponível');toast('Falha: '+e.message,true)}finally{fetching=false}}
 
 function connectionModal(root){
-  root.append(dom('h2','Conectar ao ChatGPT'),dom('p','Conexão privada com a OpenAI, sem CMD. Configure apenas uma vez; o Consecom manterá o túnel ativo quando iniciar com o Windows.'));
-  let st=state.tunnel||{};
-  let status=dom('p',st.installed?'Cliente oficial v0.0.16 instalado.':'Cliente oficial ausente: execute o instalador Consecom Plugin v4.7.0 conectado à internet.');root.append(status);
-  let t=dom('input');t.placeholder='Cole o ID tunnel_...';t.value=st.tunnel_id||'';t.autocomplete='off';
-  let k=dom('input');k.type='password';k.placeholder='Cole a chave de execução da OpenAI Platform (sk-...)';k.autocomplete='off';
-  let field1=dom('label','Identificador do túnel');let field2=dom('label','Chave da OpenAI Platform (Tunnels Read + Use)');
-  root.append(field1,t,field2,k);
-  let hint=dom('p','Essa chave é salva apenas no seu Windows, criptografada para o usuário atual. Ela não será mostrada novamente, nem enviada para esta conversa.');root.append(hint);
-  let links=dom('div',undefined,'group');links.style.justifyContent='flex-start';
-  for(let [label,url] of [['Ver meus túneis','https://platform.openai.com/settings/organization/tunnels'],['Criar chave de execução','https://platform.openai.com/settings/organization/api-keys']]){let a=dom('a',label);a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.style.color='#59c8ff';a.style.marginRight='18px';links.append(a)}
-  root.append(links);
-  let stateLine=dom('p','Status atual: '+(st.status||'desconectado'));root.append(stateLine);
-  if(st.message)root.append(dom('p',st.message));
-  let actions=dom('div',undefined,'group');actions.style.marginTop='12px';
-  let go=dom('button','Salvar e conectar','primary');go.onclick=async()=>{go.disabled=true;try{await api('tunnel/connect',{tunnel_id:t.value.trim(),api_key:k.value.trim()});k.value='';toast('Cliente de túnel iniciado. Aguarde o status Pronto.');await refresh();openModal('connection')}catch(e){toast(e.message,true);go.disabled=false}};
-  actions.append(go);
-  if(st.configured){let stop=dom('button','Desconectar e apagar chave');stop.onclick=async()=>{if(!confirm('Desconectar e remover a chave salva neste computador?'))return;try{await api('tunnel/disconnect',{});toast('Túnel desconectado');await refresh();openModal('connection')}catch(e){toast(e.message,true)}};actions.append(stop)}
-  root.append(actions);
-  root.append(dom('p','Depois que aparecer "Túnel pronto", entre em ChatGPT → Plugins → Adicionar servidor MCP personalizado → Túnel, cole o mesmo ID e conclua.'));
+ root.append(dom('h2','Conectar ao ChatGPT pelo Railway'),
+ dom('p','Conexão HTTPS de saída, sem túnel e sem API paga da OpenAI. O executável conecta-se ao Consecom Relay e o ChatGPT usa o plugin Consecom já conectado.'));
+ const status=state.desktop||{};
+ root.append(dom('p','Conexão: '+(status.connected?'● Servidor Railway conectado':status.enabled?'○ Aguardando Railway':'○ Ainda não ativada')));
+ let token=dom('input');token.type='password';token.placeholder='Token privado CONSECOM_LOCAL_WORKER_TOKEN (Railway)';token.autocomplete='off';
+ root.append(dom('label','Token do executável no Railway'),token);
+ const hint=dom('p','Use Railway → consecom-mcp-cloud → consecom-mcp-relay → Variables → CONSECOM_LOCAL_WORKER_TOKEN. Deixe vazio para manter o token já salvo. Não é a API Key de inferência do Claude Code.');
+ root.append(hint);
+ let checkbox=dom('input');checkbox.type='checkbox';checkbox.checked=Boolean(status.enabled);
+ let label=dom('label',' Ativar conexão automática quando o Consecom iniciar');
+ label.prepend(checkbox);root.append(label);
+ let save=dom('button','Salvar e conectar pelo Railway','primary');save.onclick=async()=>{
+  save.disabled=true;
+  try{
+   await api('cloud-inference/settings',{enabled:checkbox.checked,worker_token:token.value.trim()});
+   token.value='';toast('Configuração salva; aguarde a conexão HTTPS.');
+   await refresh();openModal('connection');
+  }catch(e){toast(e.message,true);save.disabled=false}
+ };
+ root.append(save);
+ const note=dom('p','Use ChatGPT → Plugins → Consecom, com URL https://consecom-mcp-relay-production.up.railway.app/mcp. A conversa ChatGPT precisa estar ativa para receber mensagens enviadas pelo painel.');
+ root.append(note);
 }
-
 
 async function browserModal(root){
  root.append(dom('h2','Navegador exclusivo'),dom('p','O Consecom usa uma sessão separada com dados próprios. Escolha Chrome ou Microsoft Edge; não haverá conexão ao perfil pessoal nem avisos para depurar suas abas existentes.'));
