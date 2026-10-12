@@ -144,7 +144,7 @@ const json=(v:any,status=200,headers:any={})=>new Response(JSON.stringify(v),{st
 const auth=(r:Request,t:string|undefined)=>!!t&&t.length>=24&&r.headers.get("authorization")==="Bearer "+t;
 const schema=(p:any={},req:string[]=[])=>({type:"object",properties:p,required:req});
 const tools=[
- {name:"consecom_live_abrir",description:"Abre Consecom Cloud Live nesta conversa. Requer widget ativo e consentimento do usuário. Opcionalmente dispara teste HTTPS.",inputSchema:schema({testar_recepcao:{type:"boolean"}}),_meta:{ui:{resourceUri:widgetURI},"openai/outputTemplate":widgetURI}},
+ {name:"consecom_live_abrir",description:"Abre Consecom Cloud Live nesta conversa. Requer widget ativo e consentimento do usuário. Opcionalmente dispara teste HTTPS.",inputSchema:schema({testar_recepcao:{type:"boolean"},mensagem_teste:{type:"string",maxLength:1500}}),_meta:{ui:{resourceUri:widgetURI},"openai/outputTemplate":widgetURI}},
  {name:"consecom_live_aguardar_e_assumir",description:"Espera ate 5 segundos e reserva eventos pendentes sem prazo de expiração.",inputSchema:schema({wait_ms:{type:"integer",minimum:0,maximum:5500}}),_meta:{"openai/widgetAccessible":true,ui:{visibility:["app"]}}},
  {name:"consecom_live_reportar_host",description:"Registra resultado de envio ao host para permitir recuperação segura.",inputSchema:schema({id:{type:"string"},status:{type:"string",enum:["attempt","host_resolved","host_rejected","unavailable"]}},["id","status"]),_meta:{"openai/widgetAccessible":true,ui:{visibility:["app"]}}},
  {name:"consecom_live_recuperar_pendente",description:"Reenfileira manualmente evento preso por mais de 2 minutos. Pode duplicar turno aceito pelo host; exige confirmação explícita.",inputSchema:schema({id:{type:"string"},confirmar_duplicacao:{type:"boolean"}},["id","confirmar_duplicacao"])},
@@ -194,7 +194,7 @@ async function handle(req:Request):Promise<Response>{
    let val:any;
    if(name==="consecom_live_abrir"&&arg.testar_recepcao===true){
     if(!Bun.env.BRIDGE_INGEST_TOKEN)throw Error("bridge token unavailable");
-    const msg="TESTE CONSECOM CLOUD. Esta mensagem chegou pela fila do Railway. Responda: 'Teste recebido pelo ChatGPT', e publique a resposta usando consecom_chat_responder com o ID do evento.";
+    const msg=typeof arg.mensagem_teste==="string"&&arg.mensagem_teste.trim().length>0&&arg.mensagem_teste.length<=1500?arg.mensagem_teste.trim():"TESTE CONSECOM CLOUD. Responda e publique pelo MCP.";
     const external_id="cloud-live-check-"+Date.now()+"-"+randomBytes(4).toString("hex");
     const rr=await fetch(issuer+"/bridge/enqueue",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+Bun.env.BRIDGE_INGEST_TOKEN},body:JSON.stringify({message:msg,external_id}),signal:AbortSignal.timeout(12000)});
     const b=await rr.json() as any;
