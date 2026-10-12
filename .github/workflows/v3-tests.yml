@@ -63,13 +63,13 @@ jobs:
           New-Item -ItemType Directory -Path dist-preview -Force | Out-Null
           go build -trimpath -ldflags='-s -w -H windowsgui' -o dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe ./installer
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          (Get-FileHash dist-preview/Consecom_Plugin_v4.14.7_PREVIEW.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii dist-preview/SHA256.txt
+          (Get-FileHash dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii dist-preview/SHA256.txt
       - name: Disponibilizar artefato temporario para teste no PC
         uses: actions/upload-artifact@v4
         with:
           name: consecom-4.14.8-preview-windows
           path: |
-            dist-preview/Consecom_Plugin_v4.14.7_PREVIEW.exe
+            dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe
             dist-preview/SHA256.txt
           if-no-files-found: error
           retention-days: 7
