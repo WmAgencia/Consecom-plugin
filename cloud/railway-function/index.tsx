@@ -219,9 +219,63 @@ async function getBatch(ms:number){
  while(batch.events.length===0&&Date.now()<end){await Bun.sleep(Math.min(250,end-Date.now()));batch=pick()}
  return {...batch,...summary()};
 }
+
+/** Protocol connectivity check only: this is NOT an inference model. */
+const gwModel="consecom-connection-test";
+const gwText="CONSECOM_CONNECTION_OK. Seu Claude Code alcançou e autenticou o Consecom Cloud no Railway. Esta resposta é uma verificação fixa do transporte, não é inteligência artificial. Ainda não há um modelo de inferência conectado ao endpoint.";
+function gatewayCredential(req:Request){
+ const expected=Bun.env.CONSECOM_GATEWAY_TEST_KEY||"";
+ if(expected.length<40)return false;
+ const h=req.headers.get("authorization")||"";
+ const fromBearer=h.toLowerCase().startsWith("bearer ")?h.slice(7):"";
+ const provided=fromBearer||req.headers.get("x-api-key")||"";
+ return provided.length===expected.length && timingSafeEqual(Buffer.from(provided),Buffer.from(expected));
+}
+const anthropicError=(type:string,message:string,status:number)=>json({type:"error",error:{type,message}},status);
+const gatewayMessage=(reqBody:any)=>{
+ const id="msg_cc_test_"+randomBytes(10).toString("hex");
+ return {id,type:"message",role:"assistant",model:gwModel,content:[{type:"text",text:gwText}],stop_reason:"end_turn",stop_sequence:null,usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}};
+};
+const sseEvent=(name:string,body:any)=>"event: "+name+"\ndata: "+JSON.stringify(body)+"\n\n";
+async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
+ const method=req.method,path=url.pathname;
+ if(path!=="/v1/messages"&&path!=="/v1/models"&&path!=="/v1/messages/count_tokens")return null;
+ if(!gatewayCredential(req))return anthropicError("authentication_error","Consecom Cloud gateway: chave ausente ou inválida.",401);
+ if(path==="/v1/models"){
+  if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
+  return json({data:[{id:gwModel,type:"model",display_name:"Consecom – apenas teste de conexão",created_at:"2026-10-11T00:00:00Z"}],has_more:false,first_id:gwModel,last_id:gwModel});
+ }
+ if(method!=="POST")return anthropicError("invalid_request_error","Method not allowed",405);
+ const cl=Number(req.headers.get("content-length")||0);
+ if(cl>131072)return anthropicError("request_too_large","Payload exceeds 128 KiB connectivity-test limit.",413);
+ let body:any;try{const raw=await req.text();if(raw.length>131072)return anthropicError("request_too_large","Payload exceeds limit",413);body=JSON.parse(raw)}catch{return anthropicError("invalid_request_error","Invalid JSON body",400)}
+ if(!body||typeof body!=="object"||Array.isArray(body))return anthropicError("invalid_request_error","Invalid Messages API request",400);
+ if(path==="/v1/messages/count_tokens"){
+  // Count endpoint must not invent model token usage. Explicitly unsupported.
+  return anthropicError("invalid_request_error","Token counting requires a genuine inference model; this is connectivity-only.",501);
+ }
+ if(body.model!==gwModel)return anthropicError("not_found_error","Only 'consecom-connection-test' exists. No inference model has been configured.",404);
+ if(!Array.isArray(body.messages))return anthropicError("invalid_request_error","messages must be an array",400);
+ if(body.tools&&Array.isArray(body.tools)&&body.tools.length>0)return anthropicError("invalid_request_error","This connection test does not support Claude Code tool_use or tool_result. It is not an LLM.",501);
+ const data=gatewayMessage(body);
+ if(body.stream!==true)return json(data,200,{"x-consecom-model-status":"connectivity-test-only"});
+ const start={...data,content:[],stop_reason:null,stop_sequence:null,usage:{input_tokens:0,output_tokens:0}};
+ const events=[
+  sseEvent("message_start",{type:"message_start",message:start}),
+  sseEvent("content_block_start",{type:"content_block_start",index:0,content_block:{type:"text",text:""}}),
+  sseEvent("ping",{type:"ping"}),
+  sseEvent("content_block_delta",{type:"content_block_delta",index:0,delta:{type:"text_delta",text:gwText}}),
+  sseEvent("content_block_stop",{type:"content_block_stop",index:0}),
+  sseEvent("message_delta",{type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:0}}),
+  sseEvent("message_stop",{type:"message_stop"})
+ ];
+ return new Response(events.join(""),{status:200,headers:{"content-type":"text/event-stream; charset=utf-8","cache-control":"no-cache, no-transform","connection":"keep-alive","x-consecom-model-status":"connectivity-test-only"}});
+}
+
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
  const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
+ const gateway=await consecomTestGateway(req,url);if(gateway)return gateway;
  const fileResponse=await artifactHttp(req,url);if(fileResponse)return fileResponse;
  if(method==="GET"&&url.pathname==="/health"){try{db.query("SELECT 1").get();return json({status:"ok",service:"consecom-cloud-mcp",version:"0.2.0",storage:"sqlite-volume",boots_from_persistent_disk:bootCount,self_test:selfTest})}catch{return json({status:"database_unavailable"},503)}}
  if(url.pathname==="/mcp"){
@@ -373,6 +427,25 @@ async function startupSelfTest(){
    if(del.status!==200)throw Error("Artifact cleanup failed");
   }
   steps.push("artifacts-delete");
+
+  // A working HTTP protocol smoke-test must not be misrepresented as model inference.
+  const authTestHeader={authorization:"Bearer "+(Bun.env.CONSECOM_GATEWAY_TEST_KEY||""),"content-type":"application/json"};
+  const testReq={model:gwModel,max_tokens:100,messages:[{role:"user",content:"banana"}]};
+  const denied=await handle(new Request("http://local/v1/messages",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(testReq)}));
+  if(denied.status!==401)throw Error("Anthropic test gateway must reject missing key");
+  steps.push("gateway-401");
+  const accepted=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify(testReq)}));
+  const acceptedBody=await accepted.json() as any;
+  if(accepted.status!==200||acceptedBody.type!=="message"||acceptedBody.model!==gwModel||!acceptedBody.content?.[0]?.text?.startsWith("CONSECOM_CONNECTION_OK"))throw Error("Anthropic static protocol test failed");
+  steps.push("gateway-nonstream-static");
+  const streamed=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify({...testReq,stream:true})}));
+  const streamPayload=await streamed.text();
+  if(streamed.status!==200||!streamed.headers.get("content-type")?.startsWith("text/event-stream")||!streamPayload.includes("event: message_stop")||!streamPayload.includes("CONSECOM_CONNECTION_OK"))throw Error("Anthropic test SSE protocol failed");
+  steps.push("gateway-sse-static");
+  const unsupported=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify({...testReq,model:"claude-sonnet"})}));
+  if(unsupported.status!==404)throw Error("Unknown real model must be rejected");
+  steps.push("gateway-reject-fake-inference");
+
 
 
   // Exercise OAuth DCR, PKCE login, token authorization and refresh against live handlers.
