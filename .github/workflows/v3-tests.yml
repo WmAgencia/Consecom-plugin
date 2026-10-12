@@ -28,6 +28,7 @@ on:
       - feat/v4.14.6-session-onboarding
       - fix/v4.14.7-live-reconnect-resilience
       - feat/v4.14.8-cloud-inference-native
+      - fix/v4.14.9-installer-startup-version
   workflow_dispatch:
 permissions:
   contents: read
@@ -61,15 +62,15 @@ jobs:
           go build -trimpath -ldflags='-s -w -H windowsgui' -o installer/payload/MCP-PC.exe .
           if ($LASTEXITCODE -ne 0) { exit 1 }
           New-Item -ItemType Directory -Path dist-preview -Force | Out-Null
-          go build -trimpath -ldflags='-s -w -H windowsgui' -o dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe ./installer
+          go build -trimpath -ldflags='-s -w -H windowsgui' -o dist-preview/Consecom_Plugin_v4.14.9_PREVIEW.exe ./installer
           if ($LASTEXITCODE -ne 0) { exit 1 }
-          (Get-FileHash dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii dist-preview/SHA256.txt
+          (Get-FileHash dist-preview/Consecom_Plugin_v4.14.9_PREVIEW.exe -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content -Encoding ascii dist-preview/SHA256.txt
       - name: Disponibilizar artefato temporario para teste no PC
         uses: actions/upload-artifact@v4
         with:
-          name: consecom-4.14.8-preview-windows
+          name: consecom-4.14.9-preview-windows
           path: |
-            dist-preview/Consecom_Plugin_v4.14.8_PREVIEW.exe
+            dist-preview/Consecom_Plugin_v4.14.9_PREVIEW.exe
             dist-preview/SHA256.txt
           if-no-files-found: error
           retention-days: 7
