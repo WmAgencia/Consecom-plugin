@@ -123,7 +123,7 @@ func TestUpdaterStagesVerifiedReleaseAndQueuesApproval(t *testing.T) {
 	hash := sha256.Sum256(payload)
 	sha := hex.EncodeToString(hash[:])
 	repo := officialUpdateRepo
-	manifest := UpdateManifest{Version: "4.14.8", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.14.8/Instalar_Consecom_2_6_1.exe", SHA256: sha}
+	manifest := UpdateManifest{Version: "4.14.9", URL: "https://github.com/WmAgencia/Consecom-plugin/releases/download/v4.14.9/Consecom_Plugin_v4.14.9.exe", SHA256: sha}
 	mb, _ := json.Marshal(manifest)
 	old := updateHTTPClient
 	updateHTTPClient = &http.Client{Timeout: 5 * time.Second, Transport: updateRoundTripper(func(r *http.Request) (*http.Response, error) {
