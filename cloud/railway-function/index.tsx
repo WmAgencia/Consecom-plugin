@@ -189,6 +189,90 @@ async function artifactHttp(req:Request,url:URL):Promise<Response|null>{
  return new Response(Buffer.from(row.body),{status:200,headers:{"content-type":row.mime,"content-disposition":'attachment; filename="'+safeFileName(row.file_name)+'"',"content-length":String(row.byte_size),"cache-control":"private, no-store","x-content-type-options":"nosniff","x-artifact-sha256":row.sha256}});
 }
 
+
+// Owner-only outbound Windows desktop bridge. No Cloudflare/OpenAI tunnel required.
+// Do not enable this prototype for multiple customers: this instance has one owner token.
+db.exec("CREATE TABLE IF NOT EXISTS desktop_workers(id TEXT PRIMARY KEY,last_seen INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS desktop_jobs(id TEXT PRIMARY KEY,tool TEXT NOT NULL,args_json TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('queued','claimed','answered','failed')),result_json TEXT,error TEXT,created_at INTEGER NOT NULL,claimed_at INTEGER,finished_at INTEGER); CREATE INDEX IF NOT EXISTS ix_desktop_jobs_state ON desktop_jobs(state,created_at);");
+const desktopWorkerId="owner-desktop";
+const desktopReadOnly=new Set([
+ "diagnostico_pc","listar_processos","pastas_autorizadas","politica_aprovacao",
+ "dev_integracoes_status","dev_projeto_inspecionar","dev_servicos_inspecionar",
+ "dev_deploy_preflight","listar_arquivos","ler_arquivo","terminal_restrito",
+ "agentes_ativos","game_booster_estado"
+]);
+const desktopOnline=()=>Boolean((db.query("SELECT last_seen FROM desktop_workers WHERE id=?").get(desktopWorkerId) as any)?.last_seen>Date.now()-65000);
+const desktopSummary=()=>({transport:"railway-https-outbound",tunnel_required:false,worker_connected:desktopOnline(),read_only_tools:[...desktopReadOnly],pending_jobs:(db.query("SELECT COUNT(*) n FROM desktop_jobs WHERE state IN ('queued','claimed')").get() as any).n});
+const desktopResult=(id:string)=>db.query("SELECT state,result_json,error FROM desktop_jobs WHERE id=?").get(id) as any;
+async function desktopMcpExecute(name:string,args:any){
+ if(!desktopReadOnly.has(name))throw Error("Ferramenta nao autorizada pelo proxy de leitura");
+ if(!desktopOnline())throw Error("Consecom Plugin Windows offline; abra o executavel e conecte ao Railway");
+ const data=JSON.stringify(args??{});if(data.length>65000)throw Error("Argumentos excedem o limite");
+ if((db.query("SELECT COUNT(*) n FROM desktop_jobs WHERE state IN ('queued','claimed')").get() as any).n>=12)throw Error("Fila do PC ocupada");
+ const id="pcj_"+randomBytes(16).toString("hex");
+ db.query("INSERT INTO desktop_jobs(id,tool,args_json,state,created_at) VALUES(?,?,?,'queued',?)").run(id,name,data,Date.now());
+ const end=Date.now()+28000;
+ while(Date.now()<end){
+  const result=desktopResult(id);
+  if(result?.state==="answered")return {ok:true,id,tool:name,resultado:JSON.parse(result.result_json)};
+  if(result?.state==="failed")return {ok:false,id,tool:name,error:result.error};
+  await Bun.sleep(300);
+ }
+ return {ok:false,id,tool:name,timeout:true,message:"O PC nao respondeu em 28s. A tarefa permanece registrada; nao sera executada duas vezes automaticamente."};
+}
+async function desktopWorkerHttp(req:Request,url:URL):Promise<Response|null>{
+ const path=url.pathname;
+ if(!path.startsWith("/desktop/worker/"))return null;
+ if(!auth(req,Bun.env.CONSECOM_LOCAL_WORKER_TOKEN))return json({error:"unauthorized"},401);
+ if(req.method!=="POST")return json({error:"method_not_allowed"},405);
+ if(Number(req.headers.get("content-length")||0)>90000)return json({error:"payload_too_large"},413);
+ let a:any;try{const txt=await req.text();if(txt.length>90000)return json({error:"payload_too_large"},413);a=JSON.parse(txt)}catch{return json({error:"invalid_json"},400)}
+ if(a?.worker_id!==desktopWorkerId)return json({error:"wrong_worker"},404);
+ if(path==="/desktop/worker/heartbeat"){
+  db.query("INSERT INTO desktop_workers(id,last_seen) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen").run(desktopWorkerId,Date.now());
+  return json({ok:true,...desktopSummary()});
+ }
+ if(path==="/desktop/worker/poll"){
+  const claimed=db.transaction(()=>{
+   const row=db.query("SELECT id,tool,args_json FROM desktop_jobs WHERE state='queued' ORDER BY created_at LIMIT 1").get() as any;
+   if(!row)return null;
+   db.query("UPDATE desktop_jobs SET state='claimed',claimed_at=? WHERE id=? AND state='queued'").run(Date.now(),row.id);
+   return {id:row.id,tool:row.tool,arguments:JSON.parse(row.args_json)};
+  })();
+  return json({job:claimed});
+ }
+ if(path==="/desktop/worker/complete"){
+  if(!/^pcj_[0-9a-f]{32}$/.test(String(a.id||"")))return json({error:"bad_id"},400);
+  const old=db.query("SELECT state FROM desktop_jobs WHERE id=?").get(a.id) as any;
+  if(!old||old.state!=="claimed")return json({error:"not_claimed"},409);
+  if(a.error){
+   db.query("UPDATE desktop_jobs SET state='failed',error=?,finished_at=? WHERE id=?").run(String(a.error).slice(0,300),Date.now(),a.id);
+   return json({ok:true});
+  }
+  const result=JSON.stringify(a.result??null);
+  if(result.length>1600000)return json({error:"result_too_large"},413);
+  db.query("UPDATE desktop_jobs SET state='answered',result_json=?,finished_at=? WHERE id=?").run(result,Date.now(),a.id);
+  return json({ok:true});
+ }
+ if(path==="/desktop/worker/send"){
+  const msg=a.message,external=a.external_id;
+  if(typeof msg!=="string"||!msg.trim()||msg.length>2000||typeof external!=="string"||!/^pc-[0-9a-f]{12}-evt-[0-9]{6}$/.test(external))return json({error:"invalid_message"},400);
+  const existing=db.query("SELECT id,state FROM events WHERE external_id=?").get(external) as any;
+  if(existing)return json({id:existing.id,status:existing.state,duplicate:true},200);
+  if((db.query("SELECT COUNT(*) c FROM events WHERE state<>'answered'").get() as any).c>=10000)return json({error:"queue_full"},429);
+  const out=db.query("INSERT INTO events(message,state,created_at,external_id) VALUES(?,'queued',?,?)").run(msg.trim(),ts(),external);
+  const id="evt-"+String(Number(out.lastInsertRowid)).padStart(6,"0");
+  db.query("UPDATE events SET id=? WHERE seq=?").run(id,Number(out.lastInsertRowid));
+  return json({id,status:"queued",persistent:true},202);
+ }
+ if(path==="/desktop/worker/reply"){
+  const external=a.external_id;
+  if(typeof external!=="string"||!/^pc-[0-9a-f]{12}-evt-[0-9]{6}$/.test(external))return json({error:"invalid_external_id"},400);
+  const row=db.query("SELECT id,state,answer FROM events WHERE external_id=?").get(external) as any;
+  return row?json({id:row.id,state:row.state,answer:row.state==="answered"?row.answer:null}):json({error:"not_found"},404);
+ }
+ return json({error:"not_found"},404);
+}
+
 const schema=(p:any={},req:string[]=[])=>({type:"object",properties:p,required:req});
 const tools=[
  {name:"consecom_live_abrir",description:"Abre Consecom Cloud Live nesta conversa. Requer widget ativo e consentimento do usuário. Opcionalmente dispara teste HTTPS.",inputSchema:schema({testar_recepcao:{type:"boolean"},mensagem_teste:{type:"string",maxLength:1500}}),_meta:{ui:{resourceUri:widgetURI},"openai/outputTemplate":widgetURI}},
@@ -196,7 +280,10 @@ const tools=[
  {name:"consecom_live_reportar_host",description:"Registra resultado de envio ao host para permitir recuperação segura.",inputSchema:schema({id:{type:"string"},status:{type:"string",enum:["attempt","host_resolved","host_rejected","unavailable"]}},["id","status"]),_meta:{"openai/widgetAccessible":true,ui:{visibility:["app"]}}},
  {name:"consecom_live_recuperar_pendente",description:"Reenfileira manualmente evento preso por mais de 2 minutos. Pode duplicar turno aceito pelo host; exige confirmação explícita.",inputSchema:schema({id:{type:"string"},confirmar_duplicacao:{type:"boolean"}},["id","confirmar_duplicacao"])},
  {name:"consecom_live_status",description:"Informa quantidades por estado, ID e idade da mensagem mais antiga.",inputSchema:schema()},
- {name:"consecom_chat_responder",description:"Registra resposta final para evento reservado, sem duplicar a resposta.",inputSchema:schema({id:{type:"string"},texto:{type:"string",maxLength:6000},tipo:{type:"string",enum:["final"]}},["id","texto","tipo"])}
+ {name:"consecom_chat_responder",description:"Registra resposta final para evento reservado, sem duplicar a resposta.",inputSchema:schema({id:{type:"string"},texto:{type:"string",maxLength:6000},tipo:{type:"string",enum:["final"]}},["id","texto","tipo"])},
+ {name:"consecom_pc_status",description:"Mostra se o executavel Consecom Plugin no Windows esta conectado ao Railway, sem tunel.",inputSchema:schema()},
+ {name:"consecom_pc_ferramentas",description:"Lista ferramentas de leitura e diagnostico autorizadas pelo Consecom remoto.",inputSchema:schema()},
+ {name:"consecom_pc_executar",description:"Executa exclusivamente ferramentas locais de LEITURA aprovadas, via HTTPS pelo Railway. Alteracoes no computador nao sao permitidas nesta fase.",inputSchema:schema({ferramenta:{type:"string"},argumentos:{type:"object"}},["ferramenta"])}
 ];
 const rpc=(id:any,result:any)=>json({jsonrpc:"2.0",id,result});
 const rpcError=(id:any,code:number,message:string)=>json({jsonrpc:"2.0",id,error:{code,message}});
@@ -624,6 +711,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
  const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
+ const desktop=await desktopWorkerHttp(req,url);if(desktop)return desktop;
  const worker=await localWorkerAPI(req,url);if(worker)return worker;
  const gateway=await consecomTestGateway(req,url);if(gateway)return gatewayCORS(gateway);
  const fileResponse=await artifactHttp(req,url);if(fileResponse)return fileResponse;
@@ -644,7 +732,10 @@ async function handle(req:Request):Promise<Response>{
   const name=q.params?.name,arg=q.params?.arguments||{};
   try{
    let val:any;
-   if(name==="consecom_live_abrir"&&arg.testar_recepcao===true){
+   if(name==="consecom_pc_status"){val=desktopSummary()}
+   else if(name==="consecom_pc_ferramentas"){val={...desktopSummary(),note:"Ferramentas remotas somente leitura; acesso aos arquivos limitado a pastas autorizadas no Windows."}}
+   else if(name==="consecom_pc_executar"){val=await desktopMcpExecute(arg.ferramenta,arg.argumentos)}
+   else if(name==="consecom_live_abrir"&&arg.testar_recepcao===true){
     if(!Bun.env.BRIDGE_INGEST_TOKEN)throw Error("bridge token unavailable");
     const msg=typeof arg.mensagem_teste==="string"&&arg.mensagem_teste.trim().length>0&&arg.mensagem_teste.length<=1500?arg.mensagem_teste.trim():"TESTE CONSECOM CLOUD. Responda e publique pelo MCP.";
     const external_id="cloud-live-check-"+Date.now()+"-"+randomBytes(4).toString("hex");
@@ -712,6 +803,8 @@ async function startupSelfTest(){
  const bridge=Bun.env.BRIDGE_INGEST_TOKEN,mcp=Bun.env.MCP_ACCESS_TOKEN;
  if(!bridge||!mcp){selfTest={status:"failed",error:"missing service auth tokens"};return}
  let testId="";
+ let desktopTestJobId="";
+ let desktopPriorSeen:number|null=null;
  try{
   const integrity=db.query("PRAGMA integrity_check").get() as any;
   if(!integrity||!Object.values(integrity).includes("ok"))throw Error("SQLite integrity_check failed");
@@ -728,6 +821,38 @@ async function startupSelfTest(){
   const listBody=await list.json() as any;
   if(!listBody.result?.tools?.some((t:any)=>t.name==="consecom_chat_responder"))throw Error("MCP tools/list failed");
   steps.push("mcp-tools-list");
+
+  const denyDesktop=await handle(new Request("http://local/desktop/worker/heartbeat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({worker_id:desktopWorkerId})}));
+  if(denyDesktop.status!==401)throw Error("desktop-worker unauthenticated request not rejected");
+  steps.push("desktop-worker-auth-401");
+  const desktopToken=Bun.env.CONSECOM_LOCAL_WORKER_TOKEN||"";
+  if(desktopToken.length<30)throw Error("desktop-worker secret is not configured");
+  const dH={authorization:"Bearer "+desktopToken,"content-type":"application/json"};
+  desktopPriorSeen=(db.query("SELECT last_seen FROM desktop_workers WHERE id=?").get(desktopWorkerId) as any)?.last_seen??null;
+  const ping=await handle(new Request("http://local/desktop/worker/heartbeat",{method:"POST",headers:dH,body:JSON.stringify({worker_id:desktopWorkerId})}));
+  if(ping.status!==200)throw Error("desktop-worker heartbeat failed");
+  steps.push("desktop-worker-heartbeat");
+  const queuedPC=await handle(new Request("http://local/desktop/worker/send",{method:"POST",headers:dH,body:JSON.stringify({worker_id:desktopWorkerId,message:"[Desktop cloud relay self-test]",external_id:"pc-000000000000-evt-999999"})}));
+  const pcMessage=await queuedPC.json() as any;
+  if(queuedPC.status!==202||!pcMessage.id)throw Error("desktop outbound message enqueue failed");
+  db.query("DELETE FROM events WHERE id=?").run(pcMessage.id);
+  steps.push("desktop-worker-send");
+  const fakeRequest=handle(new Request("http://local/mcp",{method:"POST",headers:rpcHeaders,body:JSON.stringify({jsonrpc:"2.0",id:98,method:"tools/call",params:{name:"consecom_pc_executar",arguments:{ferramenta:"diagnostico_pc",argumentos:{}}}})}));
+  let pendingPC:any=null;
+  for(let n=0;n<45;n++){
+   const poll=await handle(new Request("http://local/desktop/worker/poll",{method:"POST",headers:dH,body:JSON.stringify({worker_id:desktopWorkerId})}));
+   const parsed=await poll.json() as any;if(parsed.job){pendingPC=parsed.job;break}
+   await Bun.sleep(25);
+  }
+  if(!pendingPC?.id||pendingPC.tool!=="diagnostico_pc")throw Error("desktop MCP job was not claimed");
+  desktopTestJobId=pendingPC.id;
+  steps.push("desktop-mcp-job-claim");
+  const finish=await handle(new Request("http://local/desktop/worker/complete",{method:"POST",headers:dH,body:JSON.stringify({worker_id:desktopWorkerId,id:desktopTestJobId,result:{prova:"LOCAL_PC_ROUNDTRIP_OK"}})}));
+  if(finish.status!==200)throw Error("desktop job completion rejected");
+  const final=await fakeRequest;const roundtrip=await final.json() as any;
+  if(!roundtrip.result?.structuredContent?.ok||roundtrip.result?.structuredContent?.resultado?.prova!=="LOCAL_PC_ROUNDTRIP_OK")throw Error("desktop MCP call did not complete roundtrip");
+  steps.push("desktop-mcp-roundtrip");
+
   const currentPending=(db.query("SELECT COUNT(*) n FROM events WHERE state='queued'").get() as any).n;
   if(currentPending>0){selfTest={status:"passed-with-queue-skip",steps};return}
   const ext="selftest-"+Date.now();
@@ -946,7 +1071,12 @@ async function startupSelfTest(){
   }finally{if(selfCid){db.query("DELETE FROM oauth_clients WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_tokens WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_flows WHERE client_id=?").run(selfCid);db.query("DELETE FROM oauth_codes WHERE client_id=?").run(selfCid)}}
   selfTest={status:"passed",steps};
  }catch(err){selfTest={status:"failed",steps,error:String(err)}}
- finally{if(testId)db.query("DELETE FROM events WHERE id=?").run(testId)}
+ finally{
+  if(testId)db.query("DELETE FROM events WHERE id=?").run(testId);
+  if(desktopTestJobId)db.query("DELETE FROM desktop_jobs WHERE id=?").run(desktopTestJobId);
+  if(desktopPriorSeen===null)db.query("DELETE FROM desktop_workers WHERE id=?").run(desktopWorkerId);
+  else db.query("UPDATE desktop_workers SET last_seen=? WHERE id=?").run(desktopPriorSeen,desktopWorkerId);
+ }
 }
 void startupSelfTest().then(()=>console.info("consecom-cloud-selftest",JSON.stringify(selfTest))).catch(err=>console.error("consecom-cloud-selftest-error",String(err)));
 
