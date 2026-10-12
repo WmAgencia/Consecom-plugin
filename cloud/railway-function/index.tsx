@@ -321,13 +321,48 @@ async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
  return new Response(stream,{status:200,headers:{"content-type":"text/event-stream; charset=utf-8","cache-control":"no-cache, no-transform","x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"}});
 }
 
+
+const gatewayModelInfos=[
+ {id:gwModel,type:"model",display_name:"Consecom – somente diagnóstico de conexão",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null},
+ {id:gatewayBridgeModel,type:"model",display_name:"Consecom – ponte MCP experimental, sem LLM completa",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null}
+];
+const gatewayCORS=(response:Response)=>{
+ const headers=new Headers(response.headers);
+ headers.set("Access-Control-Allow-Origin","*");
+ headers.set("Access-Control-Allow-Methods","GET, POST, OPTIONS");
+ headers.set("Access-Control-Allow-Headers","x-api-key, authorization, anthropic-version, anthropic-beta, content-type, accept");
+ headers.set("Access-Control-Expose-Headers","x-consecom-request-id, x-consecom-model-status");
+ headers.set("Access-Control-Max-Age","600");
+ return new Response(response.body,{status:response.status,headers});
+};
+const gatewayDiagnostic=(req:Request)=>json({
+ type:"gateway_diagnostic",status:"reachable_and_authenticated",auth_scheme:"x-api-key",
+ provider:"Consecom Cloud experimental relay",inference_available:false,
+ message:"O gateway autentica requisicoes e transporta texto pelo MCP. Nao fornece uma LLM nativa nem tool_use/tool_result para Claude Desktop.",
+ available_models:gatewayModelInfos.map(m=>m.id),
+ test_model:gwModel,bridge_model:gatewayBridgeModel,
+ models_endpoint:"/v1/models",messages_endpoint:"/v1/messages",
+ caveat:"O widget ChatGPT precisa estar ativo; requisições Claude Desktop com modelos reais ou ferramentas não são suportadas."
+},200,{"cache-control":"private, no-store"});
+
 async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
  const method=req.method,path=url.pathname;
- if(path!=="/v1/messages"&&path!=="/v1/models"&&path!=="/v1/messages/count_tokens")return null;
+ if(path!=="/v1/messages"&&path!=="/v1/models"&&!path.startsWith("/v1/models/")&&path!=="/v1/messages/count_tokens"&&path!=="/gateway/diagnostics")return null;
+ if(method==="OPTIONS")return new Response(null,{status:204});
  if(!gatewayCredential(req))return anthropicError("authentication_error","Consecom Cloud gateway: chave ausente ou inválida.",401);
+ if(path==="/gateway/diagnostics"){
+  if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
+  return gatewayDiagnostic(req);
+ }
  if(path==="/v1/models"){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
-  return json({data:[{id:gwModel,type:"model",display_name:"Consecom – apenas teste de conexão",created_at:"2026-10-11T00:00:00Z"},{id:gatewayBridgeModel,type:"model",display_name:"Consecom Cloud – ponte experimental texto",created_at:"2026-10-11T00:00:00Z"}],has_more:false,first_id:gwModel,last_id:gatewayBridgeModel});
+  return json({data:gatewayModelInfos,has_more:false,first_id:gwModel,last_id:gatewayBridgeModel});
+ }
+ if(path.startsWith("/v1/models/")){
+  if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
+  const mid=decodeURIComponent(path.slice("/v1/models/".length));
+  const model=gatewayModelInfos.find(m=>m.id===mid);
+  return model?json(model):anthropicError("not_found_error","Modelo nao disponivel neste gateway de teste. Nenhuma inferencia real configurada.",404);
  }
  if(method!=="POST")return anthropicError("invalid_request_error","Method not allowed",405);
  const cl=Number(req.headers.get("content-length")||0);
@@ -360,7 +395,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
  const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
- const gateway=await consecomTestGateway(req,url);if(gateway)return gateway;
+ const gateway=await consecomTestGateway(req,url);if(gateway)return gatewayCORS(gateway);
  const fileResponse=await artifactHttp(req,url);if(fileResponse)return fileResponse;
  if(method==="GET"&&url.pathname==="/health"){try{db.query("SELECT 1").get();return json({status:"ok",service:"consecom-cloud-mcp",version:"0.2.0",storage:"sqlite-volume",boots_from_persistent_disk:bootCount,self_test:selfTest})}catch{return json({status:"database_unavailable"},503)}}
  if(url.pathname==="/mcp"){
@@ -519,6 +554,27 @@ async function startupSelfTest(){
   const denied=await handle(new Request("http://local/v1/messages",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(testReq)}));
   if(denied.status!==401)throw Error("Anthropic test gateway must reject missing key");
   steps.push("gateway-401");
+  const apiKeyProbe=await handle(new Request("http://local/v1/messages",{method:"POST",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||"","content-type":"application/json"},body:JSON.stringify(testReq)}));
+  const probeBody=await apiKeyProbe.json() as any;
+  if(apiKeyProbe.status!==200||probeBody.model!==gwModel||!probeBody.content?.[0]?.text?.includes("CONSECOM_CONNECTION_OK"))throw Error("Gateway x-api-key header authentication failed");
+  steps.push("gateway-x-api-key");
+
+  const optionsResp=await handle(new Request("http://local/v1/messages",{method:"OPTIONS",headers:{"origin":"null","access-control-request-method":"POST","access-control-request-headers":"x-api-key,content-type,anthropic-version"}}));
+  if(optionsResp.status!==204||optionsResp.headers.get("access-control-allow-origin")!=="*"||!(optionsResp.headers.get("access-control-allow-headers")||"").includes("x-api-key"))throw Error("CORS preflight for native desktop gateway failed");
+  steps.push("gateway-cors-preflight");
+  const modelsResp=await handle(new Request("http://local/v1/models",{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
+  const modelsBody=await modelsResp.json() as any;
+  if(modelsResp.status!==200||modelsBody?.data?.length!==2||modelsBody.data?.some((m:any)=>m.type!=="model"))throw Error("Gateway models discovery failed");
+  steps.push("gateway-models-list");
+  const singleResp=await handle(new Request("http://local/v1/models/"+gwModel,{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
+  const single=await singleResp.json() as any;
+  if(singleResp.status!==200||single.id!==gwModel)throw Error("Gateway model retrieve failed");
+  steps.push("gateway-model-details");
+  const diagResp=await handle(new Request("http://local/gateway/diagnostics",{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
+  const diag=await diagResp.json() as any;
+  if(diagResp.status!==200||diag.inference_available!==false||diag.auth_scheme!=="x-api-key")throw Error("Gateway diagnostics must disclose that inference is unavailable");
+  steps.push("gateway-no-inference-diagnostics");
+
   const accepted=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify(testReq)}));
   const acceptedBody=await accepted.json() as any;
   if(accepted.status!==200||acceptedBody.type!=="message"||acceptedBody.model!==gwModel||!acceptedBody.content?.[0]?.text?.startsWith("CONSECOM_CONNECTION_OK"))throw Error("Anthropic static protocol test failed");
