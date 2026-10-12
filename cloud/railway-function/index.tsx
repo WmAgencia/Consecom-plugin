@@ -515,6 +515,9 @@ async function availableModelRegistry(force=false):Promise<GatewayRegistry>{
    providers.push({name:def.name,status:ok?"reachable":"unknown",model_count:found});
   }catch(err){providers.push({name:def.name,status:"discovery_error:"+String(err).slice(0,65),model_count:found})}
  }
+ // Prefer real inference models over diagnostic transport-only entries.
+ const experimental=new Set([gwModel,gatewayBridgeModel,gatewayDesktopConnectionAlias,gatewayDesktopBridgeAlias]);
+ models.sort((x,y)=>Number(experimental.has(x.id))-Number(experimental.has(y.id)));
  registryCache={until:Date.now()+90000,models,routes,providers};
  return registryCache;
 }
