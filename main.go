@@ -169,7 +169,7 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 			pErr = pe.Error()
 		}
 		power, _ := a.boosterStatus()
-		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
+		content(w, map[string]any{"metrics": m, "processes": processes, "process_error": pErr, "roots": a.roots(), "power": power, "pending": a.pendings(), "system": a.statusExtra(), "disks": diskList(), "agents": a.getAgents(), "desktop": a.desktopRelayStatus(), "browser": a.browserStatus(), "updates": a.updateStatus()})
     case "/api/live/send":
         if r.Method!="POST"{http.Error(w,"POST necessario",405);return}
         var p struct{Message string `json:"message"`}
@@ -247,21 +247,9 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		v, e := a.updateRequest()
 		respond(w, v, e)
-	case "/api/tunnel/connect":
-		var p struct {
-			TunnelID string `json:"tunnel_id"`
-			APIKey   string `json:"api_key"`
-		}
-		if !decode(w, r, &p) {
-			return
-		}
-		respond(w, "cliente de tunel iniciado", tunnelConnect(a, p.TunnelID, p.APIKey))
-	case "/api/tunnel/disconnect":
-		if r.Method != "POST" {
-			http.Error(w, "POST necessario", 405)
-			return
-		}
-		respond(w, "tunel desconectado e credencial removida", tunnelDisconnect(a))
+	case "/api/tunnel/connect", "/api/tunnel/disconnect":
+        http.Error(w,"O tunel foi desativado. Use a conexao direta Railway em Consecom Plugin → Conectar ao ChatGPT.",http.StatusGone)
+        return
 	case "/api/contexto":
         v,e:=a.contextStatus();respond(w,v,e)
     case "/api/contexto/indice":
@@ -302,7 +290,7 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
         if !decode(w,r,&p){return}
         v,e:=a.contextReadNote(p.ID);respond(w,v,e)
 	case "/api/agents":
-		content(w, map[string]any{"agents": a.getAgents(), "tunnel": tunnelStatus(a), "browser": a.browserStatus(), "updates": a.updateStatus()})
+		content(w, map[string]any{"agents": a.getAgents(), "desktop": a.desktopRelayStatus(), "browser": a.browserStatus(), "updates": a.updateStatus()})
 	case "/api/policy":
 		var p struct {
 			Mode    string `json:"mode"`
@@ -516,7 +504,8 @@ func main() {
 		audit("bind falhou: %v", e)
 		return
 	}
-	go func() { time.Sleep(800 * time.Millisecond); tunnelAutoStart(a) }()
+	// A conexão antiga por túnel foi substituída pelo relay HTTPS de saída no Railway.
+	a.startDesktopRailwayRelay()
 	a.startCloudInferenceWorker()
 	server := &http.Server{Handler: a.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 28 * time.Second, IdleTimeout: 30 * time.Second}
 	if !*headless {
