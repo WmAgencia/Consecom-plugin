@@ -55,8 +55,8 @@ func (a *App) contextIntegrations()(any,error){
  sources:=append([]ContextSource(nil),a.cfg.ContextSources...)
  lastMCP:=a.lastMCP
  a.mu.Unlock()
- tunnel:=tunnelStatus(a)
- tunnelReady:=tunnel["status"]=="pronto"
+ relay:=a.desktopRelayStatus()
+ railwayReady:=relay["connected"]==true
  mcpRecent:=!lastMCP.IsZero()&&time.Since(lastMCP)<3*time.Minute
  out:=make([]IntegrationStatus,0,len(integrationNames))
  for _,item:=range integrationNames{
@@ -96,16 +96,15 @@ func (a *App) contextIntegrations()(any,error){
   }
   if item.ID=="opencode"&&cfg{detail="Configuracao local MCP criada; reinicie o OpenCode"}
   if item.ID=="chatgpt"{
-   detected=tunnel["installed"]==true||tunnel["configured"]==true||tunnelReady
-   cfg=tunnelReady
-   observed=mcpRecent
-   supported=false
-   ready=tunnelReady
+   detected=relay["enabled"]==true||railwayReady
+   cfg=relay["token_configured"]==true
+   observed=railwayReady||mcpRecent
+   supported=true
+   ready=railwayReady
    switch {
-   case mcpRecent: detail="ChatGPT utilizou o MCP recentemente; tunel pronto"
-   case tunnelReady: detail="Tunel pronto; aguardando a primeira chamada do ChatGPT"
-   case tunnel["configured"]==true:detail="Tunel configurado; aguardando conexao"
-   default: detail="Conecte o tunel na Central de Controle"
+   case railwayReady: detail="Consecom conectado ao MCP Cloud pelo Railway HTTPS; nenhuma porta publica nem tunel"
+   case relay["enabled"]==true: detail="Aguardando autenticacao e conexao HTTPS com Railway"
+   default: detail="Configure a conexao Railway na Central de Controle"
    }
   }
   out=append(out,IntegrationStatus{ID:item.ID,Label:item.Label,Detected:detected,Supported:supported,Configured:cfg,Observed:observed,Ready:ready,WorkspaceHint:hint,Detail:detail})
