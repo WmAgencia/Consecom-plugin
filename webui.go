@@ -952,7 +952,7 @@ async function loadContextIntegrations(){
   for(const item of window.contextIntegrationItems){
    const card=dom('div',undefined,'integration-card');
    const title=dom('h3',(item.id==='chatgpt'?'◉ ':item.id==='obsidian'?'◆ ':'▣ ')+item.label);
-   let state=item.id==='chatgpt'?(item.observed?'MCP em uso':item.ready?'Túnel conectado':item.configured?'Configurado':'Desconectado'):(item.ready?'Conectado':item.observed?'Observado anteriormente':item.configured?'Configurado':item.detected?'Detectado':'Não detectado');
+   let state=item.id==='chatgpt'?(item.observed?'MCP em uso':item.ready?'Railway conectado':item.configured?'Configurado':'Desconectado'):(item.ready?'Conectado':item.observed?'Observado anteriormente':item.configured?'Configurado':item.detected?'Detectado':'Não detectado');
    card.append(title,dom('span',state,'integration-status'),dom('p',item.detail));
    if(item.workspace_hint)card.append(dom('small','Pasta identificada: '+item.workspace_hint,'integration-hint'));
    if(item.supported&&!item.configured){
@@ -972,7 +972,7 @@ async function loadContextIntegrations(){
     index.onclick=async()=>{try{await api('contexto/integracoes/indexar',{id:item.id});toast('Fonte registrada; aplicativo MCP ainda não conectado.');await reloadContext()}catch(e){toast(e.message,true)}};
     card.append(index);
    }else if(item.id==='chatgpt'&&!item.ready){
-    const btn=dom('button','Configurar túnel');btn.onclick=()=>openModal('connection');card.append(btn);
+    const btn=dom('button','Conectar ao Railway');btn.onclick=()=>openModal('connection');card.append(btn);
    }
    box.append(card);
   }
@@ -1001,10 +1001,10 @@ function renderContextExplorer(){
   btn.append(dom('span','▸','folder-glyph'),dom('span',text),dom('span',count,'tree-count'));
   btn.onclick=click;return btn;
  }
- // The ChatGPT tunnel appears first even before its first model handshake.
+ // ChatGPT remains discoverable through Consecom Railway even before the first model handshake.
  const chat=integrations.find(v=>v.id==='chatgpt');
  if(chat&&('chatgpt'.includes(query)||query==='')){
-  const row=folder('ChatGPT',chat.observed?'em uso':chat.ready?'túnel pronto':'inativo',()=>{mark('contextDetailTitle','ChatGPT');mark('contextDetailBody',chat.detail)});
+  const row=folder('ChatGPT',chat.observed?'em uso':chat.ready?'relay conectado':'inativo',()=>{mark('contextDetailTitle','ChatGPT');mark('contextDetailBody',chat.detail)});
   tree.append(row);
  }
  if(contextData.vault_selected&&(!query||contextData.vault_name.toLowerCase().includes(query)||'obsidian'.includes(query))){
