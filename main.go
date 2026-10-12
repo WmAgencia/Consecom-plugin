@@ -156,6 +156,7 @@ func (a *App) apiHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "painel local nao autorizado", 403)
 		return
 	}
+	if strings.HasPrefix(r.URL.Path,"/api/cloud-inference/"){a.cloudInferenceAPI(w,r);return}
 	switch r.URL.Path {
 	case "/api/status":
 		m, e := systemMetrics()
@@ -385,6 +386,7 @@ func respond(w http.ResponseWriter, result any, e error) {
 func (a *App) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", a.mcpHandler)
+	mux.HandleFunc("/cloud-inference",a.cloudInferenceUI)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -515,6 +517,7 @@ func main() {
 		return
 	}
 	go func() { time.Sleep(800 * time.Millisecond); tunnelAutoStart(a) }()
+	a.startCloudInferenceWorker()
 	server := &http.Server{Handler: a.handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 28 * time.Second, IdleTimeout: 30 * time.Second}
 	if !*headless {
 		go func() { time.Sleep(450 * time.Millisecond); openDashboard("http://" + listenAddr + "/") }()

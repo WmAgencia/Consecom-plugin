@@ -32,6 +32,7 @@ type Config struct {
 	ApprovalMode  string            `json:"approval_mode,omitempty"`
 	Browser       BrowserPreference `json:"browser,omitempty"`
 	Updates       UpdateSettings    `json:"updates,omitempty"`
+	CloudInference CloudInferenceSettings `json:"cloud_inference,omitempty"`
 }
 type App struct {
 	mu             sync.Mutex
