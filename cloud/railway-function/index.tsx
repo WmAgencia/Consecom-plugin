@@ -234,11 +234,13 @@ function gatewayCredential(req:Request){
 const anthropicError=(type:string,message:string,status:number)=>json({type:"error",error:{type,message}},status);
 const gatewayMessage=(reqBody:any)=>{
  const id="msg_cc_test_"+randomBytes(10).toString("hex");
- return {id,type:"message",role:"assistant",model:gwModel,content:[{type:"text",text:gwText}],stop_reason:"end_turn",stop_sequence:null,usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}};
+ return {id,type:"message",role:"assistant",model:reqBody.model===gatewayDesktopConnectionAlias?gatewayDesktopConnectionAlias:gwModel,content:[{type:"text",text:gwText}],stop_reason:"end_turn",stop_sequence:null,usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}};
 };
 const sseEvent=(name:string,body:any)=>"event: "+name+"\ndata: "+JSON.stringify(body)+"\n\n";
 
 const gatewayBridgeModel="consecom-cloud-bridge-test";
+const gatewayDesktopBridgeAlias="claude-consecom-cloud-bridge-test";
+const gatewayDesktopConnectionAlias="claude-consecom-connection-test";
 const gatewayBridgeWaitMs=42000;
 const extractText=(part:any):string|null=>{
  if(typeof part==="string")return part;
@@ -254,9 +256,9 @@ const gatewayBridgeContent=(body:any):string|null=>{
  if(!t||t.trim().length<1||t.length>1200)return null;
  return t.trim();
 };
-const gatewayBridgeReply=(id:string,answer:string)=>({
+const gatewayBridgeReply=(id:string,answer:string,modelId:string=gatewayBridgeModel)=>({
  id:"msg_cc_bridge_"+id.replace(/[^A-Za-z0-9_-]/g,""),type:"message",role:"assistant",
- model:gatewayBridgeModel,content:[{type:"text",text:answer}],
+ model:modelId,content:[{type:"text",text:answer}],
  stop_reason:"end_turn",stop_sequence:null,
  usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}
 });
@@ -287,7 +289,7 @@ async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
  if(reqBody.stream!==true){
   const answer=await gatewayBridgePoll(id,gatewayBridgeWaitMs);
   if(answer===null)return json({type:"error",error:{type:"overloaded_error",message:"Consecom Live did not answer before timeout. The durable request remains in queue; check GET /bridge/result/"+id+" with owner bridge credentials.",request_id:id}},504,{"x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"});
-  return json(gatewayBridgeReply(id,answer),200,{"x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"});
+  return json(gatewayBridgeReply(id,answer,reqBody.model),200,{"x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"});
  }
  const encoder=new TextEncoder();
  const stream=new ReadableStream<Uint8Array>({
@@ -307,7 +309,7 @@ async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
      output(sseEvent("error",{type:"error",error:{type:"overloaded_error",message:"Consecom widget not active or timed out; durable request ID "+id}}));
      return;
     }
-    const data=gatewayBridgeReply(id,resultText);
+    const data=gatewayBridgeReply(id,resultText,reqBody.model);
     output(sseEvent("message_start",{type:"message_start",message:{...data,content:[],stop_reason:null,stop_sequence:null}}));
     output(sseEvent("content_block_start",{type:"content_block_start",index:0,content_block:{type:"text",text:""}}));
     output(sseEvent("content_block_delta",{type:"content_block_delta",index:0,delta:{type:"text_delta",text:resultText}}));
@@ -323,8 +325,10 @@ async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
 
 
 const gatewayModelInfos=[
- {id:gwModel,type:"model",display_name:"Consecom – somente diagnóstico de conexão",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null},
- {id:gatewayBridgeModel,type:"model",display_name:"Consecom – ponte MCP experimental, sem LLM completa",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null}
+ {id:gatewayDesktopConnectionAlias,type:"model",display_name:"Consecom – teste de conexão (sem IA)",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
+ {id:gatewayDesktopBridgeAlias,type:"model",display_name:"Consecom – ponte de texto experimental (não é Claude)",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
+ {id:gwModel,type:"model",display_name:"Consecom – diagnóstico legado",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
+ {id:gatewayBridgeModel,type:"model",display_name:"Consecom – ponte legado",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"}
 ];
 const gatewayCORS=(response:Response)=>{
  const headers=new Headers(response.headers);
@@ -340,6 +344,7 @@ const gatewayDiagnostic=(req:Request)=>json({
  provider:"Consecom Cloud experimental relay",inference_available:false,
  message:"O gateway autentica requisicoes e transporta texto pelo MCP. Nao fornece uma LLM nativa nem tool_use/tool_result para Claude Desktop.",
  available_models:gatewayModelInfos.map(m=>m.id),
+ discovery_compatible_aliases:[gatewayDesktopConnectionAlias,gatewayDesktopBridgeAlias],
  test_model:gwModel,bridge_model:gatewayBridgeModel,
  models_endpoint:"/v1/models",messages_endpoint:"/v1/messages",
  caveat:"O widget ChatGPT precisa estar ativo; requisições Claude Desktop com modelos reais ou ferramentas não são suportadas."
@@ -356,7 +361,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
  }
  if(path==="/v1/models"){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
-  return json({data:gatewayModelInfos,has_more:false,first_id:gwModel,last_id:gatewayBridgeModel});
+  return json({data:gatewayModelInfos,has_more:false,first_id:gatewayModelInfos[0].id,last_id:gatewayModelInfos.at(-1)?.id||null});
  }
  if(path.startsWith("/v1/models/")){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
@@ -373,8 +378,8 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
   // Count endpoint must not invent model token usage. Explicitly unsupported.
   return anthropicError("invalid_request_error","Token counting requires a genuine inference model; this is connectivity-only.",501);
  }
- if(body.model===gatewayBridgeModel)return gatewayBridgeHandler(body);
- if(body.model!==gwModel)return anthropicError("not_found_error","Only 'consecom-connection-test' exists. No inference model has been configured.",404);
+ if(body.model===gatewayBridgeModel||body.model===gatewayDesktopBridgeAlias)return gatewayBridgeHandler(body);
+ if(body.model!==gwModel&&body.model!==gatewayDesktopConnectionAlias)return anthropicError("not_found_error","No inference model is configured; available routes are diagnostic only.",404);
  if(!Array.isArray(body.messages))return anthropicError("invalid_request_error","messages must be an array",400);
  if(body.tools&&Array.isArray(body.tools)&&body.tools.length>0)return anthropicError("invalid_request_error","This connection test does not support Claude Code tool_use or tool_result. It is not an LLM.",501);
  const data=gatewayMessage(body);
@@ -564,12 +569,18 @@ async function startupSelfTest(){
   steps.push("gateway-cors-preflight");
   const modelsResp=await handle(new Request("http://local/v1/models",{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
   const modelsBody=await modelsResp.json() as any;
-  if(modelsResp.status!==200||modelsBody?.data?.length!==2||modelsBody.data?.some((m:any)=>m.type!=="model"))throw Error("Gateway models discovery failed");
+  if(modelsResp.status!==200||modelsBody?.data?.length!==4||modelsBody.data?.some((m:any)=>m.type!=="model"))throw Error("Gateway models discovery failed");
   steps.push("gateway-models-list");
+  if(!modelsBody.data.some((m:any)=>m.id===gatewayDesktopBridgeAlias)||!modelsBody.data.some((m:any)=>m.id===gatewayDesktopConnectionAlias))throw Error("Claude Desktop model aliases missing");
+  steps.push("gateway-desktop-discovery-aliases");
   const singleResp=await handle(new Request("http://local/v1/models/"+gwModel,{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
   const single=await singleResp.json() as any;
   if(singleResp.status!==200||single.id!==gwModel)throw Error("Gateway model retrieve failed");
   steps.push("gateway-model-details");
+  const aliasMsg=await handle(new Request("http://local/v1/messages",{method:"POST",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||"","content-type":"application/json"},body:JSON.stringify({...testReq,model:gatewayDesktopConnectionAlias})}));
+  const aliasPayload=await aliasMsg.json() as any;
+  if(aliasMsg.status!==200||aliasPayload.model!==gatewayDesktopConnectionAlias||!aliasPayload.content?.[0]?.text?.startsWith("CONSECOM_CONNECTION_OK"))throw Error("Claude Desktop alias response mismatch");
+  steps.push("gateway-desktop-alias-message");
   const diagResp=await handle(new Request("http://local/gateway/diagnostics",{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
   const diag=await diagResp.json() as any;
   if(diagResp.status!==200||diag.inference_available!==false||diag.auth_scheme!=="x-api-key")throw Error("Gateway diagnostics must disclose that inference is unavailable");
