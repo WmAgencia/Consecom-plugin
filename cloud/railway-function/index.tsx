@@ -9,6 +9,129 @@ db.exec("CREATE TABLE IF NOT EXISTS health_meta(k TEXT PRIMARY KEY,v INTEGER NOT
 db.query("INSERT INTO health_meta(k,v) VALUES('boots',1) ON CONFLICT(k) DO UPDATE SET v=v+1").run();
 const bootCount=(db.query("SELECT v FROM health_meta WHERE k='boots'").get() as any).v;
 const ts=()=>new Date().toISOString();
+
+import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
+const issuer="https://consecom-mcp-relay-production.up.railway.app";
+const resource=issuer+"/mcp";
+const oauthScope="consecom:live";
+db.exec("CREATE TABLE IF NOT EXISTS oauth_clients (client_id TEXT PRIMARY KEY, redirect_json TEXT NOT NULL, created_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_flows (flow_id TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, code_challenge TEXT NOT NULL, state TEXT, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_codes (code_hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_tokens (access_hash TEXT PRIMARY KEY, refresh_hash TEXT UNIQUE NOT NULL, client_id TEXT NOT NULL, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL, refresh_expires_at INTEGER NOT NULL);");
+const secureToken=()=>randomBytes(32).toString("base64url");
+const tokenHash=(x:string)=>createHash("sha256").update(x).digest("hex");
+const safeCompare=(a:string,b:string)=>a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
+const bounded=(value:string,max:number)=>typeof value==="string"&&value.length>0&&value.length<=max;
+const escapeHtml=(s:string)=>s.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#39;");
+const oauthCors={"cache-control":"no-store","referrer-policy":"no-referrer","x-content-type-options":"nosniff"};
+const ojson=(v:any,status=200,more:any={})=>new Response(JSON.stringify(v),{status,headers:{"content-type":"application/json",...oauthCors,...more}});
+const challengeHeader={"WWW-Authenticate":'Bearer resource_metadata="'+issuer+'/.well-known/oauth-protected-resource", scope="'+oauthScope+'"'};
+const unauthorized=()=>ojson({error:"unauthorized",detail:"Use OAuth no ChatGPT. Este servidor não aceita MCP anônimo."},401,challengeHeader);
+const oauthValid=(r:Request)=>{
+ const h=r.headers.get("authorization")||"";
+ if(!h.startsWith("Bearer "))return false;
+ const t=h.slice(7);
+ if(!bounded(t,256))return false;
+ // Keep existing administrative token solely for controlled diagnostics.
+ if(auth(r,Bun.env.MCP_ACCESS_TOKEN))return true;
+ const row=db.query("SELECT expires_at,resource,scope FROM oauth_tokens WHERE access_hash=?").get(tokenHash(t)) as any;
+ return !!row&&row.expires_at>Date.now()&&row.resource===resource&&row.scope===oauthScope;
+};
+function consecomOAuthMetadata(){
+ return {issuer,authorization_endpoint:issuer+"/oauth/authorize",token_endpoint:issuer+"/oauth/token",registration_endpoint:issuer+"/oauth/register",response_types_supported:["code"],grant_types_supported:["authorization_code","refresh_token"],code_challenge_methods_supported:["S256"],token_endpoint_auth_methods_supported:["none"],scopes_supported:[oauthScope],client_id_metadata_document_supported:false};
+}
+const registeredClient=(cid:string)=>db.query("SELECT * FROM oauth_clients WHERE client_id=?").get(cid) as any;
+const validRedirect=(v:string)=>{try{const u=new URL(v);return u.protocol==="https:"&&["chatgpt.com","chat.openai.com"].includes(u.hostname)&&u.username===""&&u.password===""&&u.hash===""}catch{return false}};
+const matchesRedirect=(cid:string,redirect:string)=>{
+ const row=registeredClient(cid);if(!row)return false;
+ try{return (JSON.parse(row.redirect_json) as string[]).includes(redirect)}catch{return false}
+};
+const oauthRate=new Map<string,{n:number,reset:number}>();
+function limited(r:Request,kind:string,max:number,windowMs:number){
+ const ip=(r.headers.get("x-forwarded-for")||"unknown").split(",")[0].trim().slice(0,64);
+ const k=kind+":"+ip,now=Date.now();let x=oauthRate.get(k);
+ if(!x||x.reset<now)x={n:0,reset:now+windowMs};
+ x.n++;oauthRate.set(k,x);
+ if(oauthRate.size>2500){for(const [key,v] of oauthRate)if(v.reset<now)oauthRate.delete(key)}
+ return x.n>max;
+}
+const oauthHtml=(flowId:string,error?:string)=>new Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar Consecom Cloud</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;font:15px system-ui;background:#0f172a;color:#e2e8f0}main{max-width:410px;padding:26px;border:1px solid #334155;border-radius:16px;background:#1e293b}input,button{font:inherit;padding:12px;border-radius:8px;box-sizing:border-box;width:100%}button{background:#0ea5e9;border:0;color:#051622;cursor:pointer;font-weight:700;margin-top:12px}input{background:#0f172a;color:white;border:1px solid #64748b}p{line-height:1.5;color:#cbd5e1}.error{color:#fca5a5}</style></head><body><main><h2>Conectar Consecom Cloud ao ChatGPT</h2><p>Esta autorização vincula o ChatGPT ao seu servidor MCP. Confirme que o endereço no navegador é <b>consecom-mcp-relay-production.up.railway.app</b>.</p>'+ (error?'<p class="error">'+escapeHtml(error)+'</p>':'')+'<form method="post" action="/oauth/authorize"><input type="hidden" name="flow_id" value="'+escapeHtml(flowId)+'"><label for="password">Código de pareamento do Consecom</label><input id="password" name="password" type="password" autocomplete="off" required minlength="16" maxlength="150"><button type="submit">Autorizar este ChatGPT</button></form><p style="font-size:12px">O código está na variável OAUTH_PAIRING_CODE do serviço Railway. Não compartilhe com outros usuários.</p></main></body></html>',{status:200,headers:{"content-type":"text/html; charset=utf-8","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'","x-frame-options":"DENY",...oauthCors}});
+async function handleOAuth(req:Request,u:URL):Promise<Response|null>{
+ const path=u.pathname,m=req.method,now=Date.now();
+ if(m==="GET"&&(path==="/.well-known/oauth-authorization-server"||path==="/.well-known/openid-configuration"))return ojson(consecomOAuthMetadata());
+ if(m==="GET"&&(path==="/.well-known/oauth-protected-resource"||path==="/.well-known/oauth-protected-resource/mcp"))return ojson({resource,authorization_servers:[issuer],scopes_supported:[oauthScope],bearer_methods_supported:["header"]});
+ if(path==="/oauth/register"&&m==="POST"){
+  if(limited(req,"dcr",30,3600000))return ojson({error:"rate_limited"},429);
+  let a:any;try{a=await req.json()}catch{return ojson({error:"invalid_client_metadata"},400)}
+  if(!Array.isArray(a.redirect_uris)||a.redirect_uris.length<1||a.redirect_uris.length>5||a.redirect_uris.some((x:any)=>typeof x!=="string"||!validRedirect(x)))return ojson({error:"invalid_redirect_uri"},400);
+  if(a.token_endpoint_auth_method&&a.token_endpoint_auth_method!=="none")return ojson({error:"invalid_client_metadata"},400);
+  const n=(db.query("SELECT COUNT(*) n FROM oauth_clients").get() as any).n;
+  if(n>=1000)return ojson({error:"registration_closed"},429);
+  const cid="cc_"+secureToken();
+  db.query("INSERT INTO oauth_clients (client_id,redirect_json,created_at) VALUES(?,?,?)").run(cid,JSON.stringify(a.redirect_uris),now);
+  return ojson({client_id:cid,client_id_issued_at:Math.floor(now/1000),redirect_uris:a.redirect_uris,token_endpoint_auth_method:"none",grant_types:["authorization_code","refresh_token"],response_types:["code"]},201);
+ }
+ if(path==="/oauth/authorize"&&m==="GET"){
+  if(limited(req,"authorization_start",60,3600000))return ojson({error:"rate_limited"},429);
+  const cid=u.searchParams.get("client_id")||"",ruri=u.searchParams.get("redirect_uri")||"",challenge=u.searchParams.get("code_challenge")||"",state=u.searchParams.get("state")||"",scope=u.searchParams.get("scope")||oauthScope,requestResource=u.searchParams.get("resource")||resource;
+  if(u.searchParams.get("response_type")!=="code"||u.searchParams.get("code_challenge_method")!=="S256"||!matchesRedirect(cid,ruri)||!/^[-A-Za-z0-9_]{43}$/.test(challenge)||!bounded(state,400)||scope!==oauthScope||requestResource!==resource)return ojson({error:"invalid_request",detail:"Client, callback, PKCE, scope or resource invalid."},400);
+  const flow="flow_"+secureToken(); db.query("INSERT INTO oauth_flows(flow_id,client_id,redirect_uri,code_challenge,state,resource,scope,expires_at) VALUES(?,?,?,?,?,?,?,?)").run(flow,cid,ruri,challenge,state,resource,scope,now+600000);
+  return oauthHtml(flow);
+ }
+ if(path==="/oauth/authorize"&&m==="POST"){
+  if(limited(req,"authorization_submit",12,600000))return ojson({error:"too_many_attempts"},429);
+  let f:FormData;try{f=await req.formData()}catch{return ojson({error:"invalid_request"},400)}
+  const flowId=String(f.get("flow_id")||""),secret=String(f.get("password")||"");
+  if(!flowId.startsWith("flow_")||flowId.length>100)return ojson({error:"invalid_flow"},400);
+  const flow=db.query("SELECT * FROM oauth_flows WHERE flow_id=?").get(flowId) as any;
+  if(!flow||flow.expires_at<now)return ojson({error:"expired_flow",detail:"Recomece a conexão pelo ChatGPT."},400);
+  const expected=Bun.env.OAUTH_PAIRING_CODE||"";
+  if(!expected||expected.length<16||!safeCompare(secret,expected))return oauthHtml(flowId,"Código incorreto. Confira OAUTH_PAIRING_CODE no Railway.");
+  const code=secureToken();
+  db.transaction(()=>{
+   db.query("DELETE FROM oauth_flows WHERE flow_id=?").run(flowId);
+   db.query("INSERT INTO oauth_codes(code_hash,client_id,redirect_uri,challenge,resource,scope,expires_at) VALUES(?,?,?,?,?,?,?)").run(tokenHash(code),flow.client_id,flow.redirect_uri,flow.code_challenge,resource,flow.scope,now+120000);
+  })();
+  const cb=new URL(flow.redirect_uri);cb.searchParams.set("code",code);cb.searchParams.set("state",flow.state);return new Response(null,{status:302,headers:{"Location":cb.toString(),...oauthCors}});
+ }
+ if(path==="/oauth/token"&&m==="POST"){
+  if(limited(req,"token",120,3600000))return ojson({error:"rate_limited"},429);
+  let form:URLSearchParams;try{form=new URLSearchParams(await req.text())}catch{return ojson({error:"invalid_request"},400)}
+  const grant=form.get("grant_type"),cid=form.get("client_id")||"";
+  if(!registeredClient(cid))return ojson({error:"invalid_client"},401);
+  const targetResource=form.get("resource")||resource;
+  if(targetResource!==resource)return ojson({error:"invalid_target"},400);
+  if(grant==="authorization_code"){
+   const code=form.get("code")||"",verifier=form.get("code_verifier")||"",redirect=form.get("redirect_uri")||"";
+   if(!bounded(code,256)||!/^[-._~A-Za-z0-9]{43,128}$/.test(verifier)||!matchesRedirect(cid,redirect))return ojson({error:"invalid_grant"},400);
+   const row=db.query("SELECT * FROM oauth_codes WHERE code_hash=?").get(tokenHash(code)) as any;
+   if(!row||row.expires_at<now||row.client_id!==cid||row.redirect_uri!==redirect||row.resource!==resource)return ojson({error:"invalid_grant"},400);
+   const digest=createHash("sha256").update(verifier).digest("base64url");
+   if(!safeCompare(digest,row.challenge))return ojson({error:"invalid_grant"},400);
+   return db.transaction(()=>{
+    const consumed=db.query("DELETE FROM oauth_codes WHERE code_hash=?").run(tokenHash(code));
+    if(consumed.changes!==1)return ojson({error:"invalid_grant"},400);
+    return issueOAuthTokens(cid);
+   })();
+  }
+  if(grant==="refresh_token"){
+   const refresh=form.get("refresh_token")||"";
+   if(!bounded(refresh,256))return ojson({error:"invalid_grant"},400);
+   const row=db.query("SELECT * FROM oauth_tokens WHERE refresh_hash=?").get(tokenHash(refresh)) as any;
+   if(!row||row.client_id!==cid||row.resource!==resource||row.refresh_expires_at<now)return ojson({error:"invalid_grant"},400);
+   return db.transaction(()=>{
+    const removed=db.query("DELETE FROM oauth_tokens WHERE refresh_hash=?").run(tokenHash(refresh));
+    if(removed.changes!==1)return ojson({error:"invalid_grant"},400);
+    return issueOAuthTokens(cid);
+   })();
+  }
+  return ojson({error:"unsupported_grant_type"},400);
+ }
+ return null;
+}
+function issueOAuthTokens(clientId:string){
+ const a=secureToken(),r=secureToken(),now=Date.now();
+ db.query("INSERT INTO oauth_tokens(access_hash,refresh_hash,client_id,resource,scope,expires_at,refresh_expires_at) VALUES(?,?,?,?,?,?,?)").run(tokenHash(a),tokenHash(r),clientId,resource,oauthScope,now+8*3600000,now+30*86400000);
+ return ojson({access_token:a,refresh_token:r,token_type:"Bearer",expires_in:8*3600,scope:oauthScope});
+}
+
 const widgetURI="ui://consecom/cloud/live";
 const widgetHTML="<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><style>:root{color-scheme:light dark}body{font:14px/1.5 system-ui,sans-serif; padding:16px; margin:0; background:#101820;color:#f0f6fa}section{background:#1a2936;border:1px solid #334555;padding:14px;border-radius:14px;margin-bottom:12px}h3{margin:0 0 5px}p{margin:8px 0}.muted{color:#a8bfca;font-size:12px}button{background:#147e6b;border:0;border-radius:9px;padding:9px 12px;color:white;cursor:pointer}#status{padding:10px;background:#102d30;border-radius:9px;white-space:pre-wrap;overflow-wrap:anywhere}.entry{border-bottom:1px solid #344758;padding:8px 0;overflow-wrap:anywhere}.entry:last-child{border:0}</style></head><body><section><h3>Consecom Cloud Live</h3><p class=\"muted\">Transporte experimental via MCP. Fila persistente no Railway; a recepção automática exige que este componente permaneça ativo no ChatGPT.</p><label><input id=\"auto\" type=\"checkbox\" checked> Encaminhar mensagens automaticamente</label><p id=\"status\" role=\"status\">Iniciando conexão...</p><button id=\"retry\" type=\"button\">Tentar agora</button></section><section><h3>Eventos recentes</h3><div id=\"items\" class=\"muted\">Nenhum evento recebido ainda.</div></section><script>(function(){\"use strict\";var host=window.openai||{};var auto=document.getElementById(\"auto\"),status=document.getElementById(\"status\"),items=document.getElementById(\"items\"),retry=document.getElementById(\"retry\");var active=true,polling=false,errors=0;var seen=new Set();var delay=function(ms){return new Promise(function(resolve){setTimeout(resolve,ms)})};function unpack(x){if(x&&x.structuredContent)return x.structuredContent;if(x&&x.result&&x.result.structuredContent)return x.result.structuredContent;for(var part of ((x&&x.content)||[])){if(part.type===\"text\"){try{return JSON.parse(part.text)}catch(_){}}}return x||{}}function announce(s){status.textContent=s}function persist(){if(typeof host.setWidgetState===\"function\"){try{host.setWidgetState({automatic:auto.checked})}catch(_){}}}if(host.widgetState&&typeof host.widgetState.automatic===\"boolean\")auto.checked=host.widgetState.automatic;auto.addEventListener(\"change\",function(){persist();if(auto.checked){active=true;poll()}});function report(id,flag){if(typeof host.callTool!==\"function\")return;Promise.resolve(host.callTool(\"consecom_live_reportar_host\",{id:id,status:flag})).catch(function(){})}function show(e){if(seen.has(e.id))return;seen.add(e.id);if(items.textContent===\"Nenhum evento recebido ainda.\")items.textContent=\"\";var item=document.createElement(\"div\");item.className=\"entry\";item.textContent=e.id+\" · \"+e.message;items.prepend(item);while(items.children.length>18)items.lastChild.remove()}function dispatch(e){if(!auto.checked)return;if(typeof host.sendFollowUpMessage!==\"function\"){announce(\"Este host não disponibilizou sendFollowUpMessage. Mensagem reservada, aguardando reenvio seguro.\");report(e.id,\"unavailable\");return}var prompt=\"Mensagem externa recebida pelo Consecom Cloud. ID: \"+e.id+\"\\n\\n\"+e.message+\"\\n\\nResponda à mensagem e publique sua resposta usando a ferramenta MCP consecom_chat_responder com id=\"+e.id+\", texto=RESPOSTA e tipo=final. Não alegue ter executado comandos que não executou.\";announce(\"Enviando \"+e.id+\" ao ChatGPT...\");var submitted;try{submitted=host.sendFollowUpMessage({prompt:prompt,scrollToBottom:false})}catch(err){announce(\"Erro ao solicitar turno: \"+String(err));report(e.id,\"host_rejected\");return}report(e.id,\"attempt\");Promise.resolve(submitted).then(function(r){if(r&&r.isError){report(e.id,\"host_rejected\");announce(\"Host recusou \"+e.id);return}report(e.id,\"host_resolved\");announce(\"ChatGPT aceitou a solicitação de \"+e.id+\"; aguardando resposta publicada.\")}).catch(function(err){report(e.id,\"host_rejected\");announce(\"Falha na entrega: \"+String(err).slice(0,150))})}async function loop(){if(polling||!active)return;polling=true;try{while(active){try{host=window.openai||{};if(typeof host.callTool!==\"function\"){announce(\"Ponte MCP indisponível. Tentarei reconectar.\");await delay(1200);continue}if(!auto.checked){announce(\"Recepção automática pausada pelo usuário.\");await delay(1600);continue}if(typeof host.sendFollowUpMessage!==\"function\"){announce(\"Host sem envio de mensagens. Aguardando recurso disponível...\");await delay(1800);continue}var r=unpack(await host.callTool(\"consecom_live_aguardar_e_assumir\",{wait_ms:5000}));if(r&&r.isError)throw Error(\"Ferramenta recusada\");if(!active)break;errors=0;var owned=new Set(Array.isArray(r.claimed_ids)?r.claimed_ids:[]);for(var e of (Array.isArray(r.events)?r.events:[])){show(e);if(owned.has(e.id))dispatch(e)}if(!r.events||!r.events.length)announce(\"Conectado. Aguardando mensagens no Railway...\")}catch(err){errors=Math.min(errors+1,6);announce(\"Falha temporária, reconectando: \"+String(err).slice(0,110));await delay(Math.min(5000,300*Math.pow(2,errors)))}}}finally{polling=false;if(active)void loop()}}window.addEventListener(\"pagehide\",function(){active=false});window.addEventListener(\"pageshow\",function(){active=true;poll()});document.addEventListener(\"visibilitychange\",function(){if(!document.hidden&&active)poll()});retry.addEventListener(\"click\",function(){active=true;poll()});void loop()})();</script></body></html>";
 const json=(v:any,status=200,headers:any={})=>new Response(JSON.stringify(v),{status,headers:{"content-type":"application/json","cache-control":"no-store",...headers}});
@@ -45,9 +168,10 @@ async function getBatch(ms:number){
 }
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
+ const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
  if(method==="GET"&&url.pathname==="/health"){try{db.query("SELECT 1").get();return json({status:"ok",service:"consecom-cloud-mcp",version:"0.2.0",storage:"sqlite-volume",boots_from_persistent_disk:bootCount,self_test:selfTest})}catch{return json({status:"database_unavailable"},503)}}
  if(url.pathname==="/mcp"){
-  if(!auth(req,Bun.env.MCP_ACCESS_TOKEN))return json({error:"unauthorized"},401);
+  if(!oauthValid(req))return unauthorized();
   if(method==="GET")return json({error:"use Streamable HTTP POST for this prototype"},405);
   if(method!=="POST")return json({error:"method_not_allowed"},405);
   let q:any;try{q=await req.json()}catch{return json({error:"invalid_json"},400)}
