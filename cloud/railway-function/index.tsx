@@ -15,6 +15,7 @@ const issuer="https://consecom-mcp-relay-production.up.railway.app";
 const resource=issuer+"/mcp";
 const oauthScope="consecom:live";
 db.exec("CREATE TABLE IF NOT EXISTS oauth_clients (client_id TEXT PRIMARY KEY, redirect_json TEXT NOT NULL, created_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_flows (flow_id TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, code_challenge TEXT NOT NULL, state TEXT, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_codes (code_hash TEXT PRIMARY KEY, client_id TEXT NOT NULL, redirect_uri TEXT NOT NULL, challenge TEXT NOT NULL, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS oauth_tokens (access_hash TEXT PRIMARY KEY, refresh_hash TEXT UNIQUE NOT NULL, client_id TEXT NOT NULL, resource TEXT NOT NULL, scope TEXT NOT NULL, expires_at INTEGER NOT NULL, refresh_expires_at INTEGER NOT NULL);");
+db.exec("CREATE TABLE IF NOT EXISTS oauth_consumed_flows (flow_hash TEXT PRIMARY KEY, consumed_at INTEGER NOT NULL)");
 const secureToken=()=>randomBytes(32).toString("base64url");
 const tokenHash=(x:string)=>createHash("sha256").update(x).digest("hex");
 const safeCompare=(a:string,b:string)=>a.length===b.length&&timingSafeEqual(Buffer.from(a),Buffer.from(b));
@@ -52,6 +53,9 @@ function limited(r:Request,kind:string,max:number,windowMs:number){
  if(oauthRate.size>2500){for(const [key,v] of oauthRate)if(v.reset<now)oauthRate.delete(key)}
  return x.n>max;
 }
+
+const oauthFlowError=(used:boolean)=>new Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Consecom Cloud — autorização</title><style>body{display:grid;min-height:100vh;place-items:center;margin:0;padding:20px;box-sizing:border-box;background:#0f172a;color:#e2e8f0;font:15px/1.6 system-ui}main{max-width:440px;padding:28px;background:#1e293b;border:1px solid #475569;border-radius:16px}h2{margin:0 0 8px}p{color:#cbd5e1}a{color:#7dd3fc}strong{color:#fff}</style></head><body><main><h2>'+(used?'Autorização já utilizada':'Autorização expirada')+'</h2><p>'+(used?'O Consecom recebeu e aceitou o primeiro envio deste formulário. Por segurança, ele só pode ser utilizado uma vez.':'O prazo de segurança desta tentativa de autorização terminou.')+'</p><p><strong>Agora:</strong> retorne à aba do ChatGPT e confira se o plugin ficou conectado. Caso contrário, inicie uma nova conexão OAuth no ChatGPT. Não use o botão Voltar nem reenvie este formulário.</p><p><a href="https://chatgpt.com">Voltar ao ChatGPT</a></p></main></body></html>',{status:used?409:410,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","referrer-policy":"no-referrer","x-content-type-options":"nosniff","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"}});
+
 const oauthHtml=(flowId:string,error?:string)=>new Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar Consecom Cloud</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;font:15px system-ui;background:#0f172a;color:#e2e8f0}main{max-width:410px;padding:26px;border:1px solid #334155;border-radius:16px;background:#1e293b}input,button{font:inherit;padding:12px;border-radius:8px;box-sizing:border-box;width:100%}button{background:#0ea5e9;border:0;color:#051622;cursor:pointer;font-weight:700;margin-top:12px}input{background:#0f172a;color:white;border:1px solid #64748b}p{line-height:1.5;color:#cbd5e1}.error{color:#fca5a5}</style></head><body><main><h2>Conectar Consecom Cloud ao ChatGPT</h2><p>Esta autorização vincula o ChatGPT ao seu servidor MCP. Confirme que o endereço no navegador é <b>consecom-mcp-relay-production.up.railway.app</b>.</p>'+ (error?'<p class="error">'+escapeHtml(error)+'</p>':'')+'<form method="post" action="/oauth/authorize"><input type="hidden" name="flow_id" value="'+escapeHtml(flowId)+'"><label for="password">Código de pareamento do Consecom</label><input id="password" name="password" type="password" autocomplete="off" required minlength="16" maxlength="150"><button type="submit">Autorizar este ChatGPT</button></form><p style="font-size:12px">O código está na variável OAUTH_PAIRING_CODE do serviço Railway. Não compartilhe com outros usuários.</p></main></body></html>',{status:200,headers:{"content-type":"text/html; charset=utf-8","content-security-policy":"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'","x-frame-options":"DENY",...oauthCors}});
 async function handleOAuth(req:Request,u:URL):Promise<Response|null>{
  const path=u.pathname,m=req.method,now=Date.now();
@@ -81,12 +85,14 @@ async function handleOAuth(req:Request,u:URL):Promise<Response|null>{
   const flowId=String(f.get("flow_id")||""),secret=String(f.get("password")||"");
   if(!flowId.startsWith("flow_")||flowId.length>100)return ojson({error:"invalid_flow"},400);
   const flow=db.query("SELECT * FROM oauth_flows WHERE flow_id=?").get(flowId) as any;
-  if(!flow||flow.expires_at<now)return ojson({error:"expired_flow",detail:"Recomece a conexão pelo ChatGPT."},400);
+  if(!flow||flow.expires_at<now){const used=!!db.query("SELECT 1 FROM oauth_consumed_flows WHERE flow_hash=?").get(tokenHash(flowId));return oauthFlowError(used)}
   const expected=Bun.env.OAUTH_PAIRING_CODE||"";
   if(!expected||expected.length<16||!safeCompare(secret,expected))return oauthHtml(flowId,"Código incorreto. Confira OAUTH_PAIRING_CODE no Railway.");
   const code=secureToken();
   db.transaction(()=>{
    db.query("DELETE FROM oauth_flows WHERE flow_id=?").run(flowId);
+   db.query("INSERT INTO oauth_consumed_flows(flow_hash,consumed_at) VALUES(?,?)").run(tokenHash(flowId),now);
+   db.query("DELETE FROM oauth_consumed_flows WHERE consumed_at < ?").run(now-86400000);
    db.query("INSERT INTO oauth_codes(code_hash,client_id,redirect_uri,challenge,resource,scope,expires_at) VALUES(?,?,?,?,?,?,?)").run(tokenHash(code),flow.client_id,flow.redirect_uri,flow.code_challenge,resource,flow.scope,now+120000);
   })();
   const cb=new URL(flow.redirect_uri);cb.searchParams.set("code",code);cb.searchParams.set("state",flow.state);return new Response(null,{status:302,headers:{"Location":cb.toString(),...oauthCors}});
@@ -303,6 +309,9 @@ async function startupSelfTest(){
    const login=await handle(new Request("http://local/oauth/authorize",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({flow_id:fid,password:Bun.env.OAUTH_PAIRING_CODE||""})}));
    const location=login.headers.get("Location");
    if(login.status!==302||!location)throw Error("oauth-consent failed");
+   const duplicatedLogin=await handle(new Request("http://local/oauth/authorize",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({flow_id:fid,password:Bun.env.OAUTH_PAIRING_CODE||""})}));
+   if(duplicatedLogin.status!==409||(await duplicatedLogin.text()).includes("Autorização já utilizada")===false)throw Error("OAuth replay-handling failed");
+   steps.push("oauth-replay-friendly-error");
    const code=new URL(location).searchParams.get("code");
    if(!code)throw Error("oauth-code missing");
    steps.push("oauth-consent");
