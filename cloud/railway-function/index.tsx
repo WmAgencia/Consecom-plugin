@@ -324,6 +324,129 @@ async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
 }
 
 
+
+// Optional local inference backend (Ollama Anthropic-compatible) via an outbound-only worker.
+// This does not access ChatGPT consumer sessions or extract outputs from the ChatGPT UI.
+db.exec("CREATE TABLE IF NOT EXISTS local_inference_workers (worker_id TEXT PRIMARY KEY,models_json TEXT NOT NULL,seen_at INTEGER NOT NULL);CREATE TABLE IF NOT EXISTS local_inference_jobs(id TEXT PRIMARY KEY,worker_id TEXT NOT NULL,model_id TEXT NOT NULL,request_json TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('queued','claimed','answered','failed')),result_json TEXT,error TEXT,created_at INTEGER NOT NULL,leased_at INTEGER,finished_at INTEGER);CREATE INDEX IF NOT EXISTS ix_local_jobs_state ON local_inference_jobs(worker_id,state,created_at);");
+const workerId="owner-local";
+const localAuth=(req:Request)=>auth(req,Bun.env.CONSECOM_LOCAL_WORKER_TOKEN);
+const localModels=()=>{
+ const rows=db.query("SELECT models_json FROM local_inference_workers WHERE worker_id=? AND seen_at>?").all(workerId,Date.now()-90000) as any[];
+ if(!rows.length)return [] as any[];
+ try{
+  const a=JSON.parse(rows[0].models_json);
+  if(!Array.isArray(a))return [];
+  return a.filter((m:any)=>typeof m?.id==="string"&&typeof m?.ollama_id==="string"&&m.id.startsWith("claude-local-")).slice(0,24).map((m:any)=>({
+   id:m.id,ollama_id:m.ollama_id,type:"model",display_name:m.display_name||m.ollama_id,created_at:"2026-10-11T00:00:00Z",
+   lifecycle:"active",capabilities:{tool_use:true},max_input_tokens:null,max_tokens:null
+  }));
+ }catch{return [] as any[]}
+};
+const activeLocalModel=(id:string)=>localModels().find(m=>m.id===id)||null;
+const localJob=db.transaction((modelId:string,body:any)=>{
+ const id="li_"+randomBytes(16).toString("hex");
+ db.query("INSERT INTO local_inference_jobs(id,worker_id,model_id,request_json,state,created_at) VALUES(?,?,?,?,'queued',?)").run(id,workerId,modelId,JSON.stringify(body),Date.now());
+ db.query("DELETE FROM local_inference_jobs WHERE finished_at IS NOT NULL AND finished_at<?").run(Date.now()-86400000);
+ return id;
+});
+const localJobResult=(id:string)=>db.query("SELECT state,result_json,error FROM local_inference_jobs WHERE id=?").get(id) as any;
+async function localAwait(id:string,limitMs:number){
+ const end=Date.now()+limitMs;
+ while(Date.now()<end){
+  const row=localJobResult(id);
+  if(row?.state==="answered"||row?.state==="failed")return row;
+  await Bun.sleep(500);
+ }
+ return null;
+}
+function responseToSSE(message:any):string{
+ const full={...message,type:"message",role:"assistant",content:[],stop_reason:null,stop_sequence:null};
+ let out=sseEvent("message_start",{type:"message_start",message:full});
+ for(const [index,block] of (message.content||[]).entries()){
+  let opening:any;
+  let delta:any=null;
+  if(block?.type==="text"){opening={type:"text",text:""};delta={type:"text_delta",text:block.text||""}}
+  else if(block?.type==="tool_use"){opening={type:"tool_use",id:block.id,name:block.name,input:{}};delta={type:"input_json_delta",partial_json:JSON.stringify(block.input||{})}}
+  else if(block?.type==="thinking"){opening={type:"thinking",thinking:""};delta={type:"thinking_delta",thinking:block.thinking||""}}
+  else continue;
+  out+=sseEvent("content_block_start",{type:"content_block_start",index,content_block:opening});
+  if(delta)out+=sseEvent("content_block_delta",{type:"content_block_delta",index,delta});
+  out+=sseEvent("content_block_stop",{type:"content_block_stop",index});
+ }
+ out+=sseEvent("message_delta",{type:"message_delta",delta:{stop_reason:message.stop_reason||"end_turn",stop_sequence:message.stop_sequence||null},usage:{output_tokens:message.usage?.output_tokens||0}});
+ return out+sseEvent("message_stop",{type:"message_stop"});
+}
+async function localInferenceResponse(body:any):Promise<Response>{
+ const mdl=activeLocalModel(body.model);
+ if(!mdl)return anthropicError("not_found_error","O modelo local não está conectado. Inicie o worker Ollama.",404);
+ const pending=(db.query("SELECT COUNT(*) n FROM local_inference_jobs WHERE state IN ('queued','claimed')").get() as any).n;
+ if(pending>=8)return anthropicError("overloaded_error","Fila de inferência local cheia.",529);
+ const id=localJob(body.model,body);
+ if(body.stream!==true){
+  const row=await localAwait(id,55000);
+  if(!row)return json({type:"error",error:{type:"overloaded_error",message:"Modelo local não respondeu no prazo; verifique o worker."},request_id:id},504,{"x-consecom-request-id":id});
+  if(row.state==="failed")return anthropicError("api_error",row.error||"Worker local indisponível",502);
+  return json(JSON.parse(row.result_json),200,{"x-consecom-model-status":"local-inference","x-consecom-request-id":id});
+ }
+ const encoder=new TextEncoder();
+ const stream=new ReadableStream({
+  async start(controller){
+   try{
+    const end=Date.now()+120000;let row:any=null;
+    while(Date.now()<end){
+     row=localJobResult(id);if(row?.state==="answered"||row?.state==="failed")break;
+     controller.enqueue(encoder.encode(sseEvent("ping",{type:"ping"})));
+     await Bun.sleep(2000);
+    }
+    if(!row||row.state!=="answered"){
+     controller.enqueue(encoder.encode(sseEvent("error",{type:"error",error:{type:"api_error",message:row?.error||"Tempo de resposta local excedido."}})));
+    }else controller.enqueue(encoder.encode(responseToSSE(JSON.parse(row.result_json))));
+   }catch{controller.enqueue(encoder.encode(sseEvent("error",{type:"error",error:{type:"api_error",message:"Erro no processamento local."}})))}
+   finally{controller.close()}
+  }
+ });
+ return new Response(stream,{status:200,headers:{"content-type":"text/event-stream; charset=utf-8","cache-control":"no-store","x-consecom-model-status":"local-inference","x-consecom-request-id":id}});
+}
+async function localWorkerAPI(req:Request,url:URL):Promise<Response|null>{
+ const path=url.pathname,method=req.method;
+ if(!path.startsWith("/worker/inference/"))return null;
+ if(!localAuth(req))return json({error:"unauthorized"},401);
+ if(method!=="POST")return json({error:"method_not_allowed"},405);
+ const bytes=Number(req.headers.get("content-length")||0);if(bytes>2200000)return json({error:"payload_too_large"},413);
+ let body:any;try{const raw=await req.text();if(raw.length>2200000)return json({error:"payload_too_large"},413);body=JSON.parse(raw)}catch{return json({error:"invalid_json"},400)}
+ if(body.worker_id!==workerId)return json({error:"worker_not_found"},404);
+ if(path==="/worker/inference/register"){
+  if(!Array.isArray(body.models)||body.models.length>24)return json({error:"invalid_models"},400);
+  const list=body.models.filter((m:any)=>typeof m?.id==="string"&&/^claude-local-[A-Za-z0-9._-]{2,100}$/.test(m.id)&&typeof m.ollama_id==="string"&&m.ollama_id.length<130).map((m:any)=>({id:m.id,ollama_id:m.ollama_id,display_name:String(m.display_name||m.ollama_id).slice(0,130)}));
+  db.query("INSERT INTO local_inference_workers(worker_id,models_json,seen_at) VALUES(?,?,?) ON CONFLICT(worker_id) DO UPDATE SET models_json=excluded.models_json,seen_at=excluded.seen_at").run(workerId,JSON.stringify(list),Date.now());
+  registryCache=null;
+  return json({ok:true,models:list.length},200);
+ }
+ if(path==="/worker/inference/poll"){
+  db.query("UPDATE local_inference_jobs SET state='queued',leased_at=NULL WHERE worker_id=? AND state='claimed' AND leased_at<?").run(workerId,Date.now()-120000);
+  const claim=db.transaction(()=>{
+   const row=db.query("SELECT id,request_json,model_id FROM local_inference_jobs WHERE worker_id=? AND state='queued' ORDER BY created_at LIMIT 1").get(workerId) as any;
+   if(!row)return null;
+   db.query("UPDATE local_inference_jobs SET state='claimed',leased_at=? WHERE id=? AND state='queued'").run(Date.now(),row.id);
+   return {id:row.id,model_id:row.model_id,request:JSON.parse(row.request_json)};
+  })();
+  return json({job:claim});
+ }
+ if(path==="/worker/inference/complete"){
+  if(!/^li_[0-9a-f]{32}$/.test(body.id||""))return json({error:"invalid_id"},400);
+  const row=db.query("SELECT id,model_id,state FROM local_inference_jobs WHERE id=? AND worker_id=?").get(body.id,workerId) as any;
+  if(!row||row.state!=="claimed")return json({error:"not_claimed"},409);
+  if(body.error){db.query("UPDATE local_inference_jobs SET state='failed',error=?,finished_at=? WHERE id=?").run(String(body.error).slice(0,240),Date.now(),body.id);return json({ok:true})}
+  const result=body.response;
+  if(!result||result.type!=="message"||result.role!=="assistant"||!Array.isArray(result.content)||typeof result.stop_reason!=="string")return json({error:"invalid_anthropic_message"},422);
+  result.model=row.model_id;
+  const encoded=JSON.stringify(result);if(encoded.length>1600000)return json({error:"response_too_large"},413);
+  db.query("UPDATE local_inference_jobs SET state='answered',result_json=?,finished_at=? WHERE id=? AND state='claimed'").run(encoded,Date.now(),body.id);
+  return json({ok:true});
+ }
+ return json({error:"not_found"},404);
+}
+
 const gatewayModelInfos=[
  {id:gatewayDesktopConnectionAlias,type:"model",display_name:"Consecom – teste de conexão (sem IA)",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
  {id:gatewayDesktopBridgeAlias,type:"model",display_name:"Consecom – ponte de texto experimental (não é Claude)",created_at:"2026-10-11T00:00:00Z",capabilities:null,max_input_tokens:null,max_tokens:null,lifecycle:"active"},
@@ -366,6 +489,7 @@ async function availableModelRegistry(force=false):Promise<GatewayRegistry>{
  if(!force&&registryCache&&Date.now()<registryCache.until)return registryCache;
  const models:any[]=[...gatewayModelInfos],routes=new Map<string,GatewayRoute>(),providers:GatewayRegistry["providers"]=[];
  const used=new Set<string>(models.map(x=>x.id));
+ for(const m of localModels()){if(!used.has(m.id)){models.push(m);used.add(m.id)}}
  for(const def of providerConfig()){
   const cred=upstreamHeaders(def);
   if(!cred){providers.push({name:def.name,status:"missing_credential",model_count:0});continue}
@@ -433,9 +557,9 @@ const gatewayCORS=(response:Response)=>{
 };
 const gatewayDiagnostic=async(req:Request)=>{const registry=await availableModelRegistry();return json({
  type:"gateway_diagnostic",status:"reachable_and_authenticated",auth_scheme:"x-api-key",
- provider:"Consecom Cloud experimental relay",inference_available:false,
+ provider:"Consecom Cloud gateway",inference_available:(registry.routes.size>0||localModels().length>0),local_worker_online:localModels().length>0,local_model_count:localModels().length,
  message:"O gateway autentica requisicoes e transporta texto pelo MCP. Nao fornece uma LLM nativa nem tool_use/tool_result para Claude Desktop.",
- available_models:gatewayModelInfos.map(m=>m.id),
+ available_models:registry.models.map((m:any)=>m.id),
  discovery_compatible_aliases:[gatewayDesktopConnectionAlias,gatewayDesktopBridgeAlias],
  test_model:gwModel,bridge_model:gatewayBridgeModel,
  models_endpoint:"/v1/models",messages_endpoint:"/v1/messages",
@@ -473,6 +597,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
   // Count endpoint must not invent model token usage. Explicitly unsupported.
   return anthropicError("invalid_request_error","Token counting requires a genuine inference model; this is connectivity-only.",501);
  }
+ if(activeLocalModel(body.model))return localInferenceResponse(body);
  const upstream=await upstreamMessage(req,body);if(upstream)return upstream;
  if(body.model===gatewayBridgeModel||body.model===gatewayDesktopBridgeAlias)return gatewayBridgeHandler(body);
  if(body.model!==gwModel&&body.model!==gatewayDesktopConnectionAlias)return anthropicError("not_found_error","No inference model is configured; available routes are diagnostic only.",404);
@@ -496,6 +621,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
 async function handle(req:Request):Promise<Response>{
  const url=new URL(req.url),method=req.method;
  const oauthResp=await handleOAuth(req,url);if(oauthResp)return oauthResp;
+ const worker=await localWorkerAPI(req,url);if(worker)return worker;
  const gateway=await consecomTestGateway(req,url);if(gateway)return gatewayCORS(gateway);
  const fileResponse=await artifactHttp(req,url);if(fileResponse)return fileResponse;
  if(method==="GET"&&url.pathname==="/health"){try{db.query("SELECT 1").get();return json({status:"ok",service:"consecom-cloud-mcp",version:"0.2.0",storage:"sqlite-volume",boots_from_persistent_disk:bootCount,self_test:selfTest})}catch{return json({status:"database_unavailable"},503)}}
@@ -679,7 +805,7 @@ async function startupSelfTest(){
   steps.push("gateway-desktop-alias-message");
   const diagResp=await handle(new Request("http://local/gateway/diagnostics",{method:"GET",headers:{"x-api-key":Bun.env.CONSECOM_GATEWAY_TEST_KEY||""}}));
   const diag=await diagResp.json() as any;
-  if(diagResp.status!==200||diag.inference_available!==false||diag.auth_scheme!=="x-api-key")throw Error("Gateway diagnostics must disclose that inference is unavailable");
+  if(diagResp.status!==200||diag.inference_available!==(localModels().length>0||(await availableModelRegistry()).routes.size>0)||diag.auth_scheme!=="x-api-key")throw Error("Gateway diagnostics must match real inference availability");
   steps.push("gateway-no-inference-diagnostics");
   const registry=await availableModelRegistry(true);
   if(registry.models.length<4||registry.routes.size!==0||registry.providers.length!==0)throw Error("Default registry must only include diagnostic models when no upstream is configured");
@@ -688,6 +814,51 @@ async function startupSelfTest(){
   const page=paginateModels(registry.models,new URL("http://local/v1/models?limit=2"));
   if(!page||page.data.length!==2||page.has_more!==true)throw Error("Model list pagination failed");
   steps.push("gateway-dynamic-catalog-normalization");
+
+  // Exercise the outbound-worker protocol without executing any local commands.
+  const wc=Bun.env.CONSECOM_LOCAL_WORKER_TOKEN||"";
+  if(wc.length<30)throw Error("Worker token missing");
+  const wrkHeaders={"authorization":"Bearer "+wc,"content-type":"application/json"};
+  const wbody=(extra:any)=>JSON.stringify({worker_id:workerId,...extra});
+  const noWorkerAuth=await handle(new Request("http://local/worker/inference/poll",{method:"POST",headers:{"content-type":"application/json"},body:wbody({})}));
+  if(noWorkerAuth.status!==401)throw Error("Worker auth missing 401");steps.push("local-worker-auth-401");
+  const existing=db.query("SELECT * FROM local_inference_workers WHERE worker_id=?").get(workerId) as any;
+  const testModelId="claude-local-railway-testonly";
+  let localId="";
+  if(!existing||existing.seen_at<Date.now()-90000){
+   try{
+    const wr=await handle(new Request("http://local/worker/inference/register",{method:"POST",headers:wrkHeaders,body:wbody({models:[{id:testModelId,ollama_id:"testonly",display_name:"Local Test"}]})}));
+    if(wr.status!==200)throw Error("Worker registration failed");
+    steps.push("local-worker-register");
+    const discovered=await availableModelRegistry(true);
+    if(!discovered.models.some((m:any)=>m.id===testModelId))throw Error("Local model not discovered");
+    steps.push("local-worker-model-discovery");
+    const promise=handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify({model:testModelId,max_tokens:100,tools:[{name:"Bash",input_schema:{type:"object",properties:{command:{type:"string"}}}}],messages:[{role:"user",content:"Use Bash"}]})}));
+    let claim:any=null;
+    for(let attempt=0;attempt<30;attempt++){
+     const poll=await handle(new Request("http://local/worker/inference/poll",{method:"POST",headers:wrkHeaders,body:wbody({})}));
+     const body=await poll.json() as any;
+     if(body.job){claim=body.job;break}
+     await Bun.sleep(40);
+    }
+    if(!claim?.id)throw Error("Worker polling did not claim queued job");
+    localId=claim.id;steps.push("local-worker-job-claim");
+    const mock={id:"msg_local_test",type:"message",role:"assistant",model:"testonly",content:[{type:"tool_use",id:"toolu_local_test",name:"Bash",input:{command:"echo Consecom"}}],stop_reason:"tool_use",stop_sequence:null,usage:{input_tokens:10,output_tokens:20}};
+    const complete=await handle(new Request("http://local/worker/inference/complete",{method:"POST",headers:wrkHeaders,body:wbody({id:localId,response:mock})}));
+    if(complete.status!==200)throw Error("Worker completion rejected");steps.push("local-worker-tool-result");
+    const response=await promise,output=await response.json() as any;
+    if(response.status!==200||output.model!==testModelId||output.stop_reason!=="tool_use"||output.content?.[0]?.name!=="Bash")throw Error("Gateway did not relay tool_use response");
+    const streamed=responseToSSE(output);
+    if(!streamed.includes("input_json_delta")||!streamed.includes("toolu_local_test")||!streamed.includes("message_stop"))throw Error("tool_use streaming encoder incomplete");
+    steps.push("local-worker-tool-use-roundtrip");
+   }finally{
+    if(localId)db.query("DELETE FROM local_inference_jobs WHERE id=?").run(localId);
+    if(existing)db.query("INSERT INTO local_inference_workers(worker_id,models_json,seen_at) VALUES(?,?,?) ON CONFLICT(worker_id) DO UPDATE SET models_json=excluded.models_json,seen_at=excluded.seen_at").run(existing.worker_id,existing.models_json,existing.seen_at);
+    else db.query("DELETE FROM local_inference_workers WHERE worker_id=?").run(workerId);
+    registryCache=null;
+   }
+  }else steps.push("local-worker-mock-skipped-active-client");
+
 
   const accepted=await handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify(testReq)}));
   const acceptedBody=await accepted.json() as any;
