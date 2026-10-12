@@ -24,7 +24,7 @@ import (
 // v4.11 delivers the exclusive managed browser, compact approval control,
 // and read-only indexed Obsidian graph. The official updater consumes a
 // checksum-verified GitHub release, not a branch build.
-const consecomVersion = "4.14.9"
+const consecomVersion = "4.15.0"
 // A única origem autorizada para instalar atualizações do Consecom Plugin.
 const officialUpdateRepo = "WmAgencia/Consecom-plugin"
 const updateMaxBytes int64 = 64 << 20
