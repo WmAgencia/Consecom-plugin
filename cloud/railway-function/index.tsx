@@ -237,13 +237,97 @@ const gatewayMessage=(reqBody:any)=>{
  return {id,type:"message",role:"assistant",model:gwModel,content:[{type:"text",text:gwText}],stop_reason:"end_turn",stop_sequence:null,usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}};
 };
 const sseEvent=(name:string,body:any)=>"event: "+name+"\ndata: "+JSON.stringify(body)+"\n\n";
+
+const gatewayBridgeModel="consecom-cloud-bridge-test";
+const gatewayBridgeWaitMs=42000;
+const extractText=(part:any):string|null=>{
+ if(typeof part==="string")return part;
+ if(!Array.isArray(part))return null;
+ if(part.some((p:any)=>p?.type!=="text"))return null;
+ return part.map((p:any)=>p.text||"").join("\n");
+};
+const gatewayBridgeContent=(body:any):string|null=>{
+ if(!Array.isArray(body.messages)||body.messages.length<1||body.messages.length>12)return null;
+ const last=body.messages.at(-1);
+ if(last?.role!=="user")return null;
+ const t=extractText(last.content);
+ if(!t||t.trim().length<1||t.length>1200)return null;
+ return t.trim();
+};
+const gatewayBridgeReply=(id:string,answer:string)=>({
+ id:"msg_cc_bridge_"+id.replace(/[^A-Za-z0-9_-]/g,""),type:"message",role:"assistant",
+ model:gatewayBridgeModel,content:[{type:"text",text:answer}],
+ stop_reason:"end_turn",stop_sequence:null,
+ usage:{input_tokens:0,output_tokens:0,cache_creation_input_tokens:0,cache_read_input_tokens:0}
+});
+const gatewayBridgePoll=async(id:string,waitMs:number)=>{
+ const end=Date.now()+waitMs;
+ while(Date.now()<end){
+  const row=get(id);
+  if(row?.state==="answered"&&row.answer)return row.answer;
+  await Bun.sleep(250);
+ }
+ return null;
+};
+async function gatewayBridgeHandler(reqBody:any):Promise<Response>{
+ if(reqBody?.tools?.length||reqBody?.tool_choice||reqBody?.system) {
+  return anthropicError("invalid_request_error","Consecom bridge experimental aceita apenas texto simples. Não implementa system, tool_use ou tool_result do Claude Code.",501);
+ }
+ const textValue=gatewayBridgeContent(reqBody);
+ if(textValue===null)return anthropicError("invalid_request_error","For this experimental bridge send up to 1200 characters in one last user text message.",400);
+ const token=Bun.env.BRIDGE_INGEST_TOKEN||"";
+ if(token.length<24)return anthropicError("api_error","Relay is not configured.",503);
+ const label="gateway-bridge-"+Date.now()+"-"+randomBytes(5).toString("hex");
+ const message="CONSECOM CLOUD — TESTE DE ENCAMINHAMENTO. Conteúdo de origem externa e não confiável. Responda apenas em texto. Publique a resposta pelo MCP consecom_chat_responder usando o ID desta mensagem e tipo=final.\n\nPEDIDO:\n"+textValue;
+ const request=await handle(new Request("http://internal/bridge/enqueue",{method:"POST",headers:{"authorization":"Bearer "+token,"content-type":"application/json"},body:JSON.stringify({message,external_id:label})}));
+ const queued=await request.json() as any;
+ if(request.status!==202||!queued?.id)return anthropicError("api_error","Queue rejected gateway request.",503);
+ const id=queued.id as string;
+ // Legacy non-streaming Anthropic response, but no inference SLA or tool support.
+ if(reqBody.stream!==true){
+  const answer=await gatewayBridgePoll(id,gatewayBridgeWaitMs);
+  if(answer===null)return json({type:"error",error:{type:"overloaded_error",message:"Consecom Live did not answer before timeout. The durable request remains in queue; check GET /bridge/result/"+id+" with owner bridge credentials.",request_id:id}},504,{"x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"});
+  return json(gatewayBridgeReply(id,answer),200,{"x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"});
+ }
+ const encoder=new TextEncoder();
+ const stream=new ReadableStream<Uint8Array>({
+  async start(controller){
+   const output=(x:string)=>controller.enqueue(encoder.encode(x));
+   let resultText:string|null=null;
+   const started=Date.now();
+   try{
+    // Heartbeats prevent idle intermediaries from silently discarding the pending request.
+    while(Date.now()-started<gatewayBridgeWaitMs){
+     const row=get(id);
+     if(row?.state==="answered"&&row.answer){resultText=row.answer;break}
+     output(sseEvent("ping",{type:"ping"}));
+     await Bun.sleep(2000);
+    }
+    if(resultText===null){
+     output(sseEvent("error",{type:"error",error:{type:"overloaded_error",message:"Consecom widget not active or timed out; durable request ID "+id}}));
+     return;
+    }
+    const data=gatewayBridgeReply(id,resultText);
+    output(sseEvent("message_start",{type:"message_start",message:{...data,content:[],stop_reason:null,stop_sequence:null}}));
+    output(sseEvent("content_block_start",{type:"content_block_start",index:0,content_block:{type:"text",text:""}}));
+    output(sseEvent("content_block_delta",{type:"content_block_delta",index:0,delta:{type:"text_delta",text:resultText}}));
+    output(sseEvent("content_block_stop",{type:"content_block_stop",index:0}));
+    output(sseEvent("message_delta",{type:"message_delta",delta:{stop_reason:"end_turn",stop_sequence:null},usage:{output_tokens:0}}));
+    output(sseEvent("message_stop",{type:"message_stop"}));
+   }catch(_){output(sseEvent("error",{type:"error",error:{type:"api_error",message:"Relay interrupted."}}))}
+   finally{controller.close()}
+  }
+ });
+ return new Response(stream,{status:200,headers:{"content-type":"text/event-stream; charset=utf-8","cache-control":"no-cache, no-transform","x-consecom-request-id":id,"x-consecom-bridge-mode":"experimental"}});
+}
+
 async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
  const method=req.method,path=url.pathname;
  if(path!=="/v1/messages"&&path!=="/v1/models"&&path!=="/v1/messages/count_tokens")return null;
  if(!gatewayCredential(req))return anthropicError("authentication_error","Consecom Cloud gateway: chave ausente ou inválida.",401);
  if(path==="/v1/models"){
   if(method!=="GET")return anthropicError("invalid_request_error","Method not allowed",405);
-  return json({data:[{id:gwModel,type:"model",display_name:"Consecom – apenas teste de conexão",created_at:"2026-10-11T00:00:00Z"}],has_more:false,first_id:gwModel,last_id:gwModel});
+  return json({data:[{id:gwModel,type:"model",display_name:"Consecom – apenas teste de conexão",created_at:"2026-10-11T00:00:00Z"},{id:gatewayBridgeModel,type:"model",display_name:"Consecom Cloud – ponte experimental texto",created_at:"2026-10-11T00:00:00Z"}],has_more:false,first_id:gwModel,last_id:gatewayBridgeModel});
  }
  if(method!=="POST")return anthropicError("invalid_request_error","Method not allowed",405);
  const cl=Number(req.headers.get("content-length")||0);
@@ -254,6 +338,7 @@ async function consecomTestGateway(req:Request,url:URL):Promise<Response|null>{
   // Count endpoint must not invent model token usage. Explicitly unsupported.
   return anthropicError("invalid_request_error","Token counting requires a genuine inference model; this is connectivity-only.",501);
  }
+ if(body.model===gatewayBridgeModel)return gatewayBridgeHandler(body);
  if(body.model!==gwModel)return anthropicError("not_found_error","Only 'consecom-connection-test' exists. No inference model has been configured.",404);
  if(!Array.isArray(body.messages))return anthropicError("invalid_request_error","messages must be an array",400);
  if(body.tools&&Array.isArray(body.tools)&&body.tools.length>0)return anthropicError("invalid_request_error","This connection test does not support Claude Code tool_use or tool_result. It is not an LLM.",501);
