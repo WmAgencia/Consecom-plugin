@@ -95,7 +95,7 @@ async function handleOAuth(req:Request,u:URL):Promise<Response|null>{
    db.query("DELETE FROM oauth_consumed_flows WHERE consumed_at < ?").run(now-86400000);
    db.query("INSERT INTO oauth_codes(code_hash,client_id,redirect_uri,challenge,resource,scope,expires_at) VALUES(?,?,?,?,?,?,?)").run(tokenHash(code),flow.client_id,flow.redirect_uri,flow.code_challenge,resource,flow.scope,now+120000);
   })();
-  const cb=new URL(flow.redirect_uri);cb.searchParams.set("code",code);cb.searchParams.set("state",flow.state);return new Response(null,{status:302,headers:{"Location":cb.toString(),...oauthCors}});
+  const cb=new URL(flow.redirect_uri);cb.searchParams.set("code",code);cb.searchParams.set("state",flow.state);console.info("consecom-oauth-redirect",JSON.stringify({host:cb.hostname,path:cb.pathname,has_code:cb.searchParams.has("code"),has_state:cb.searchParams.has("state")}));return new Response(null,{status:302,headers:{"Location":cb.toString(),...oauthCors}});
  }
  if(path==="/oauth/token"&&m==="POST"){
   if(limited(req,"token",120,3600000))return ojson({error:"rate_limited"},429);
