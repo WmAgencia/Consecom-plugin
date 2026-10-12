@@ -24,7 +24,7 @@ var assets embed.FS
 
 const createNoWindow = 0x08000000
 // MUST equal consecomVersion in ../update.go; tested by version_sync_test.go.
-const installerExpectedVersion = "4.14.9"
+const installerExpectedVersion = "4.15.0"
 
 func msg(title, body string, style uintptr) int {
 	dll := syscall.NewLazyDLL("user32.dll")
