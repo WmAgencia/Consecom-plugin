@@ -531,6 +531,32 @@ async function startupSelfTest(){
   if(unsupported.status!==404)throw Error("Unknown real model must be rejected");
   steps.push("gateway-reject-fake-inference");
 
+  // Gateway -> same durable Cloud queue -> MCP claim -> ChatGPT-style response -> gateway result.
+  const bridgeInput={model:gatewayBridgeModel,max_tokens:64,messages:[{role:"user",content:"bridge-diagnostic"}],stream:false};
+  let queuedId="";
+  try{
+   const pendingResponse=handle(new Request("http://local/v1/messages",{method:"POST",headers:authTestHeader,body:JSON.stringify(bridgeInput)}));
+   for(let i=0;i<24;i++){
+    const found=db.query("SELECT id FROM events WHERE external_id LIKE 'gateway-bridge-%' AND state='queued' ORDER BY seq DESC LIMIT 1").get() as any;
+    if(found?.id){queuedId=found.id;break}
+    await Bun.sleep(50);
+   }
+   if(!queuedId)throw Error("gateway did not enqueue into Consecom Cloud");
+   steps.push("gateway-cloud-enqueue");
+   const claimedResp=await getCall(88,"consecom_live_aguardar_e_assumir",{wait_ms:1});
+   const claimJson=await claimedResp.json() as any;
+   if(!claimJson.result?.structuredContent?.claimed_ids?.includes(queuedId))throw Error("Gateway message not available to MCP widget");
+   steps.push("gateway-cloud-mcp-claim");
+   const replyResp=await getCall(89,"consecom_chat_responder",{id:queuedId,texto:"BRIDGE_INTERNAL_ROUNDTRIP_OK",tipo:"final"});
+   const replyData=await replyResp.json() as any;
+   if(!replyData.result?.structuredContent?.ok)throw Error("MCP response not persisted");
+   const gatewayReply=await pendingResponse;
+   const gatewayData=await gatewayReply.json() as any;
+   if(gatewayReply.status!==200||gatewayData.model!==gatewayBridgeModel||gatewayData.content?.[0]?.text!=="BRIDGE_INTERNAL_ROUNDTRIP_OK")throw Error("Gateway did not return Cloud MCP response");
+   steps.push("gateway-cloud-response-roundtrip");
+  }finally{if(queuedId)db.query("DELETE FROM events WHERE id=?").run(queuedId)}
+
+
 
 
   // Exercise OAuth DCR, PKCE login, token authorization and refresh against live handlers.
