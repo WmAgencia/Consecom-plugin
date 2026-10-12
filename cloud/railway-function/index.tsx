@@ -18,6 +18,7 @@ const tools=[
  {name:"consecom_live_abrir",description:"Abre Consecom Cloud Live nesta conversa. Requer widget ativo e consentimento do usuário.",inputSchema:schema(),_meta:{ui:{resourceUri:widgetURI},"openai/outputTemplate":widgetURI}},
  {name:"consecom_live_aguardar_e_assumir",description:"Espera ate 5 segundos e reserva eventos pendentes sem prazo de expiração.",inputSchema:schema({wait_ms:{type:"integer",minimum:0,maximum:5500}}),_meta:{"openai/widgetAccessible":true,ui:{visibility:["app"]}}},
  {name:"consecom_live_reportar_host",description:"Registra resultado de envio ao host para permitir recuperação segura.",inputSchema:schema({id:{type:"string"},status:{type:"string",enum:["attempt","host_resolved","host_rejected","unavailable"]}},["id","status"]),_meta:{"openai/widgetAccessible":true,ui:{visibility:["app"]}}},
+ {name:"consecom_live_recuperar_pendente",description:"Reenfileira manualmente evento preso por mais de 2 minutos. Pode duplicar turno aceito pelo host; exige confirmação explícita.",inputSchema:schema({id:{type:"string"},confirmar_duplicacao:{type:"boolean"}},["id","confirmar_duplicacao"])},
  {name:"consecom_live_status",description:"Informa quantidades por estado, ID e idade da mensagem mais antiga.",inputSchema:schema()},
  {name:"consecom_chat_responder",description:"Registra resposta final para evento reservado, sem duplicar a resposta.",inputSchema:schema({id:{type:"string"},texto:{type:"string",maxLength:6000},tipo:{type:"string",enum:["final"]}},["id","texto","tipo"])}
 ];
@@ -73,6 +74,14 @@ async function handle(req:Request):Promise<Response>{
       }else db.query("UPDATE events SET host_status=? WHERE id=? AND state='claimed'").run(arg.status,arg.id);
     }
     val={ok:true,id:arg.id,status:get(arg.id)?.state,host_status:get(arg.id)?.host_status};
+   }
+   else if(name==="consecom_live_recuperar_pendente"){
+    if(typeof arg.id!=="string"||arg.confirmar_duplicacao!==true)throw Error("explicit duplicate-risk confirmation required");
+    const evt=get(arg.id);
+    if(!evt||evt.state!=="claimed"||!evt.claimed_at)throw Error("event not pending in claimed state");
+    if(Date.now()-Date.parse(evt.claimed_at)<120000)throw Error("wait at least 2 minutes before manual recovery");
+    db.query("UPDATE events SET state='queued',claimed_at=NULL,host_status='manual_requeue' WHERE id=? AND state='claimed'").run(arg.id);
+    val={ok:true,id:arg.id,state:get(arg.id)?.state,warning:"previous ChatGPT turn may have executed; duplicated response is possible"};
    }
    else if(name==="consecom_chat_responder"){
     if(typeof arg.id!=="string"||typeof arg.texto!=="string"||!arg.texto.trim()||arg.texto.length>6000||arg.tipo!=="final")throw Error("invalid reply");
