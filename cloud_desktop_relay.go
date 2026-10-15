@@ -5,6 +5,7 @@ import (
  "encoding/hex"
  "encoding/json"
  "errors"
+ "fmt"
  "net/http"
  "strings"
  "sync"
@@ -48,7 +49,8 @@ func (a *App) desktopRelayStatus()map[string]any{
   "last_error":desktopRelay.lastError,
   "last_job":desktopRelay.lastJob,
   "last_message":desktopRelay.lastDelivered,
-  "permissions":"remote read-only; local protected project roots",
+  "permissions":"local MCP approval policy and protected project roots",
+  "local_tool_count":len(tools()),
  }
 }
 func desktopUpdate(success bool,err error,job,msg string){
@@ -92,6 +94,16 @@ func desktopExecuteReadonly(a *App,job desktopJob)(any,error){
  if len(args)==0 {args=json.RawMessage("{}")}
  return a.dispatch(job.Tool,args)
 }
+// Authenticated relay calls retain local MCP approval, root and browser checks.
+func desktopExecuteTool(a *App,job desktopJob)(any,error){
+ if len(job.Arguments)>65000{return nil,errors.New("argumentos excedem 65 KiB")}
+ found:=false
+ for _,t:=range tools(){if t.Name==job.Tool{found=true;break}}
+ if !found{return nil,errors.New("ferramenta nao registrada no MCP Windows")}
+ args:=job.Arguments
+ if len(args)==0||string(args)=="null"{args=json.RawMessage("{}")}
+ return a.dispatch(job.Tool,args)
+}
 func (a *App) desktopSyncChat(client *http.Client,token string){
  if a.live==nil{return}
  for _,ev:=range a.live.desktopPendingMessages(){
@@ -128,6 +140,7 @@ func (a *App) startDesktopRailwayRelay(){
  go func(){
   client:=&http.Client{Timeout:30*time.Second}
   var lastHeartbeat time.Time
+  var lastCatalog time.Time
   var priorToken string
   for {
    settings:=a.cloudInferenceSettings()
@@ -136,23 +149,37 @@ func (a *App) startDesktopRailwayRelay(){
     time.Sleep(2500*time.Millisecond)
     continue
    }
-   if settings.WorkerToken!=priorToken {priorToken=settings.WorkerToken;lastHeartbeat=time.Time{}}
+   if settings.WorkerToken!=priorToken {priorToken=settings.WorkerToken;lastHeartbeat=time.Time{};lastCatalog=time.Time{}}
    if time.Since(lastHeartbeat)>15*time.Second{
-    var ping struct{OK bool `json:"ok"`}
+    var ping struct{OK bool `json:"ok"`; CatalogRegistered bool `json:"catalog_registered"`}
     err:=cloudWorkerCall(client,"/desktop/worker/heartbeat",settings.WorkerToken,map[string]any{"worker_id":desktopWorkerName},&ping)
     if err!=nil||!ping.OK{
      if err==nil{err=errors.New("Railway rejeitou a conexao")}
      desktopUpdate(false,err,"","");time.Sleep(4*time.Second);continue
     }
     lastHeartbeat=time.Now()
+    if !ping.CatalogRegistered{lastCatalog=time.Time{}}
     desktopUpdate(true,nil,"","")
+   }
+   // Register all MCP tool schemas after restarts and periodically.
+   if time.Since(lastCatalog)>2*time.Minute {
+    catalog:=tools()
+    var registered struct{OK bool `json:"ok"`;ToolCount int `json:"tool_count"`}
+    err:=cloudWorkerCall(client,"/desktop/worker/register",settings.WorkerToken,map[string]any{
+     "worker_id":desktopWorkerName,"tools":catalog,
+    },&registered)
+    if err!=nil||!registered.OK||registered.ToolCount!=len(catalog){
+     if err==nil{err=fmt.Errorf("Railway registrou %d de %d ferramentas",registered.ToolCount,len(catalog))}
+     desktopUpdate(false,err,"","");time.Sleep(4*time.Second);continue
+    }
+    lastCatalog=time.Now()
    }
    a.desktopSyncChat(client,settings.WorkerToken)
    var polled struct{Job *desktopJob `json:"job"`}
    err:=cloudWorkerCall(client,"/desktop/worker/poll",settings.WorkerToken,map[string]any{"worker_id":desktopWorkerName},&polled)
    if err!=nil{desktopUpdate(false,err,"","");time.Sleep(4*time.Second);continue}
    if polled.Job!=nil{
-    value,execErr:=desktopExecuteReadonly(a,*polled.Job)
+    value,execErr:=desktopExecuteTool(a,*polled.Job)
     data:=map[string]any{"worker_id":desktopWorkerName,"id":polled.Job.ID}
     if execErr!=nil {data["error"]=clip(execErr.Error(),250)}else{data["result"]=value}
     var done struct{OK bool `json:"ok"`}
