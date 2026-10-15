@@ -170,7 +170,8 @@ func (a *App) startDesktopRailwayRelay(){
     },&registered)
     if err!=nil||!registered.OK||registered.ToolCount!=len(catalog){
      if err==nil{err=fmt.Errorf("Railway registrou %d de %d ferramentas",registered.ToolCount,len(catalog))}
-     desktopUpdate(false,err,"","");time.Sleep(4*time.Second);continue
+     // Keep legacy read-only calls and chat working until Railway deploys the new endpoint.
+     desktopRelay.mu.Lock();desktopRelay.lastError="Catalogo remoto ainda nao atualizado: "+err.Error();desktopRelay.mu.Unlock()
     }
     lastCatalog=time.Now()
    }
