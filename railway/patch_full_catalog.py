@@ -44,7 +44,7 @@ const desktopWorkerId="owner-desktop";'''
     )
     change(
         ' if(Number(req.headers.get("content-length")||0)>90000)return json({error:"payload_too_large"},413);\n let a:any;try{const txt=await req.text();if(txt.length>90000)return json({error:"payload_too_large"},413);a=JSON.parse(txt)}catch{return json({error:"invalid_json"},400)}',
-        ''' const maxWorkerBytes=path==="/desktop/worker/register"?262144:90000;
+        ''' const maxWorkerBytes=path==="/desktop/worker/complete"?12582912:path==="/desktop/worker/register"?262144:90000;
  if(Number(req.headers.get("content-length")||0)>maxWorkerBytes)return json({error:"payload_too_large"},413);
  let a:any;try{const txt=await req.text();if(txt.length>maxWorkerBytes)return json({error:"payload_too_large"},413);a=JSON.parse(txt)}catch{return json({error:"invalid_json"},400)}'''
     )
@@ -75,13 +75,22 @@ const desktopWorkerId="owner-desktop";'''
   db.query'''
     )
     change(
+        'if(result.length>1600000)return json({error:"result_too_large"},413);',
+        'if(result.length>10000000)return json({error:"result_too_large"},413);'
+    )
+    change(
         'if(q.method==="tools/list")return rpc(q.id,{tools});',
         'if(q.method==="tools/list")return rpc(q.id,{tools:[...tools,...desktopCatalog()]});'
     )
     change(
         'else if(name==="consecom_pc_executar"){val=await desktopMcpExecute(arg.ferramenta,arg.argumentos)}',
         '''else if(name==="consecom_pc_executar"){val=await desktopMcpExecute(arg.ferramenta,arg.argumentos)}
-   else if(desktopCatalogHas(name)){val=await desktopMcpExecute(name,arg)}'''
+   else if(desktopCatalogHas(name)){
+    val=await desktopMcpExecute(name,arg);
+    if(val?.ok&&name==="browser_capturar_tela"&&typeof val.resultado?.Data==="string"
+       &&/^[A-Za-z0-9+/=]+$/.test(val.resultado.Data)&&val.resultado.Data.length<=10000000)
+      return rpc(q.id,{content:[{type:"image",mimeType:"image/jpeg",data:val.resultado.Data}]});
+   }'''
     )
     return source
 
