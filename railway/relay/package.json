@@ -1,0 +1,10 @@
+{
+  "name": "consecom-mcp-railway-relay",
+  "version": "4.16.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.tsx",
+    "check": "bun build index.tsx --target=bun --outdir=/tmp/consecom-relay-compiled"
+  }
+}
